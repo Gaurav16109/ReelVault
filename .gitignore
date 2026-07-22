@@ -424,7 +424,15 @@ test-results/
 
 # Mac bundle stuff
 *.dmg
+# *.app (bare pattern) matches both compiled Mac/Mac Catalyst app bundles AND any
+# folder whose name ends in ".app" case-insensitively, which also catches the
+# ReelVault.App project folder. Re-include that project tree, then re-exclude
+# just its build output so compiled .app bundles stay ignored.
 *.app
+!ReelVault.App/
+!ReelVault.App/**
+ReelVault.App/[Bb]in/
+ReelVault.App/[Oo]bj/
 
 # content below from: https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
 # General
