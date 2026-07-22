@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReelVault.Api", "ReelVault.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReelVault.App", "ReelVault.App\ReelVault.App.csproj", "{B8665005-B3D8-4890-85DB-379C0A61402C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReelVault.Api.Tests", "ReelVault.Api.Tests\ReelVault.Api.Tests.csproj", "{4D483916-DF5B-4515-ACD7-1760BD53BE29}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{B8665005-B3D8-4890-85DB-379C0A61402C}.Release|x64.Build.0 = Release|Any CPU
 		{B8665005-B3D8-4890-85DB-379C0A61402C}.Release|x86.ActiveCfg = Release|Any CPU
 		{B8665005-B3D8-4890-85DB-379C0A61402C}.Release|x86.Build.0 = Release|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Debug|x64.Build.0 = Debug|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Debug|x86.Build.0 = Debug|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Release|x64.ActiveCfg = Release|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Release|x64.Build.0 = Release|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Release|x86.ActiveCfg = Release|Any CPU
+		{4D483916-DF5B-4515-ACD7-1760BD53BE29}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

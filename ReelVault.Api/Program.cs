@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ReelVault.Api;
+using ReelVault.Api.Extraction;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,12 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<ReelVaultDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ReelVaultDb")));
+
+// Depend on ILlmExtractor everywhere so a different provider (e.g. Ollama) can be swapped in later.
+builder.Services.AddHttpClient<ILlmExtractor, GeminiFoodExtractor>(client =>
+{
+    client.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+});
 
 // Permissive for Phase 0 local development only; the MAUI app calls the API from a different origin/port.
 const string CorsPolicy = "AllowMauiApp";

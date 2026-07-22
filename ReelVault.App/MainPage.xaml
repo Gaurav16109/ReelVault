@@ -5,29 +5,56 @@
 
     <ScrollView>
         <VerticalStackLayout
-            Padding="30,0"
-            Spacing="25">
+            Padding="30,20"
+            Spacing="16">
 
             <Label
-                Text="ReelVault"
+                Text="ReelVault — Food Extraction"
                 Style="{StaticResource Headline}"
                 SemanticProperties.HeadingLevel="Level1" />
 
             <Label
-                Text="Phase 0: verify the app can reach the API and the API can reach Postgres."
-                Style="{StaticResource SubHeadline}"
-                SemanticProperties.HeadingLevel="Level2" />
+                Text="Paste a Reel caption below and extract structured food data. Phase 1: extraction only, nothing is saved."
+                Style="{StaticResource SubHeadline}" />
+
+            <Label Text="Reel URL (optional)" FontAttributes="Bold" />
+            <Entry
+                x:Name="SourceUrlEntry"
+                Placeholder="https://instagram.com/reel/..." />
+
+            <Label Text="Caption text" FontAttributes="Bold" />
+            <Editor
+                x:Name="CaptionEditor"
+                Placeholder="Paste the Reel caption here..."
+                AutoSize="TextChanges"
+                MinimumHeightRequest="120" />
 
             <Button
-                x:Name="TestConnectionButton"
-                Text="Test API Connection"
-                Clicked="OnTestConnectionClicked"
+                x:Name="ExtractButton"
+                Text="Extract"
+                Clicked="OnExtractClicked"
                 HorizontalOptions="Fill" />
 
+            <ActivityIndicator
+                x:Name="LoadingIndicator"
+                IsRunning="False"
+                IsVisible="False" />
+
             <Label
-                x:Name="ResultLabel"
-                Text=""
-                LineBreakMode="WordWrap" />
+                x:Name="ErrorLabel"
+                TextColor="Red"
+                LineBreakMode="WordWrap"
+                IsVisible="False" />
+
+            <BoxView HeightRequest="1" Color="LightGray" />
+
+            <VerticalStackLayout x:Name="ResultsPanel" Spacing="8" IsVisible="False">
+                <Label Text="Extracted data" FontAttributes="Bold" FontSize="18" />
+                <VerticalStackLayout x:Name="FieldsContainer" Spacing="4" />
+
+                <Label Text="Summary" FontAttributes="Bold" Margin="0,12,0,0" />
+                <Label x:Name="SummaryLabel" LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>
