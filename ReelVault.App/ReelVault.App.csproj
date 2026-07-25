@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<!-- Phase 0 targets Mac Catalyst only; Android/iOS/Windows/Tizen are later phases. -->
-		<TargetFramework>net10.0-maccatalyst</TargetFramework>
+		<!-- Phase 4a adds Android alongside Mac Catalyst; iOS/Windows/Tizen are still later phases. -->
+		<TargetFrameworks>net10.0-maccatalyst;net10.0-android</TargetFrameworks>
 
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
@@ -31,7 +31,18 @@
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<WindowsPackageType>None</WindowsPackageType>
 
-		<SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+		<!-- Per-platform: Android needs a numeric minimum API level, not the Catalyst OS version. -->
+		<SupportedOSPlatformVersion Condition="'$(TargetFramework)' == 'net10.0-maccatalyst'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="'$(TargetFramework)' == 'net10.0-android'">21.0</SupportedOSPlatformVersion>
+
+		<!-- Android tooling needs a JDK 21-or-earlier and the Android SDK; neither is installed to the
+		     default search paths on this machine (no Android Studio), and `/usr/libexec/java_home` picks
+		     up an unrelated JDK 23 install, which the Android build rejects (XA0030). Default to the
+		     Phase 4a setup locations here so plain `dotnet build`/`dotnet test` from the solution root
+		     work without extra flags; still overridable via -p:AndroidSdkDirectory=/-p:JavaSdkDirectory=
+		     for other machines/CI. -->
+		<AndroidSdkDirectory Condition="'$(TargetFramework)' == 'net10.0-android' and '$(AndroidSdkDirectory)' == ''">$(HOME)/Library/Android/sdk</AndroidSdkDirectory>
+		<JavaSdkDirectory Condition="'$(TargetFramework)' == 'net10.0-android' and '$(JavaSdkDirectory)' == ''">$(HOME)/Library/Android/jdk/jdk-17.0.20+8/Contents/Home</JavaSdkDirectory>
 
 		<!-- The installed maui-maccatalyst workload pack pins Xcode 26.4; this machine has 26.6. Skip the strict check until Microsoft ships a matching pack. -->
 		<ValidateXcodeVersion>false</ValidateXcodeVersion>

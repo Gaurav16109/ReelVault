@@ -2,9 +2,9 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using NpgsqlTypes;
 using ReelVault.Api;
 
 #nullable disable
@@ -12,9 +12,11 @@ using ReelVault.Api;
 namespace ReelVault.Api.Migrations
 {
     [DbContext(typeof(ReelVaultDbContext))]
-    partial class ReelVaultDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722191550_AddSavedItems")]
+    partial class AddSavedItems
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -29,9 +31,6 @@ namespace ReelVault.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Area")
-                        .HasColumnType("text");
-
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasColumnType("text");
@@ -39,9 +38,6 @@ namespace ReelVault.Api.Migrations
                     b.Property<string>("CategoryData")
                         .IsRequired()
                         .HasColumnType("jsonb");
-
-                    b.Property<string>("City")
-                        .HasColumnType("text");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -51,11 +47,6 @@ namespace ReelVault.Api.Migrations
 
                     b.Property<DateTime>("SavedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<NpgsqlTsVector>("SearchVector")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("tsvector")
-                        .HasComputedColumnSql("to_tsvector('english',\n    coalesce(\"Title\", '') || ' ' ||\n    coalesce(\"Summary\", '') || ' ' ||\n    coalesce(\"Area\", '') || ' ' ||\n    coalesce(\"City\", '') || ' ' ||\n    coalesce(\"CategoryData\" ->> 'Name', '') || ' ' ||\n    coalesce(\"CategoryData\" ->> 'PlaceName', '') || ' ' ||\n    coalesce(\"CategoryData\" ->> 'Cuisine', '') || ' ' ||\n    coalesce(\"CategoryData\" ->> 'PlaceType', '') || ' ' ||\n    coalesce(\"CategoryData\" ->> 'MustTry', '') || ' ' ||\n    coalesce(\"CategoryData\" ->> 'Highlights', '')\n)", true);
 
                     b.Property<string>("SourceCaption")
                         .HasColumnType("text");
@@ -87,19 +78,9 @@ namespace ReelVault.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Area");
-
-                    b.HasIndex("Category");
-
-                    b.HasIndex("City");
-
                     b.HasIndex("IsDeleted");
 
                     b.HasIndex("SavedAt");
-
-                    b.HasIndex("SearchVector");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
 
                     b.ToTable("SavedItems");
                 });

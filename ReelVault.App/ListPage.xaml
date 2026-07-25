@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:ReelVault.App"
+             x:Class="ReelVault.App.ListPage"
+             x:DataType="local:ListPage"
+             Title="Saved Items">
+
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Padding="20" RowSpacing="8">
+
+        <Label
+            Grid.Row="0"
+            x:Name="SubtitleLabel"
+            Text="Saved items, newest first."
+            Style="{StaticResource SubHeadline}" />
+
+        <SearchBar
+            Grid.Row="1"
+            x:Name="SearchBarControl"
+            Placeholder="Search title, area, cuisine, must-try..."
+            SearchButtonPressed="OnSearchPressed"
+            TextChanged="OnSearchTextChanged" />
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="10">
+            <Picker Grid.Column="0" x:Name="CityPicker" Title="City" SelectedIndexChanged="OnLocationFilterChanged" />
+            <Picker Grid.Column="1" x:Name="AreaPicker" Title="Area" SelectedIndexChanged="OnLocationFilterChanged" />
+        </Grid>
+
+        <ActivityIndicator
+            Grid.Row="3"
+            x:Name="LoadingIndicator"
+            IsRunning="False"
+            IsVisible="False" />
+
+        <Label
+            Grid.Row="3"
+            x:Name="ErrorLabel"
+            TextColor="Red"
+            LineBreakMode="WordWrap"
+            IsVisible="False" />
+
+        <Label
+            Grid.Row="3"
+            x:Name="EmptyLabel"
+            Text="Nothing found. Extract a caption and tap Save."
+            IsVisible="False" />
+
+        <CollectionView
+            Grid.Row="4"
+            x:Name="ItemsCollectionView"
+            SelectionMode="Single"
+            SelectionChanged="OnItemSelected">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="local:SavedItemRow">
+                    <Grid Padding="0,10" ColumnDefinitions="56,*" ColumnSpacing="12">
+
+                        <!-- Real thumbnail -->
+                        <Image
+                            Grid.Column="0"
+                            Source="{Binding ThumbnailUrl}"
+                            IsVisible="{Binding HasThumbnail}"
+                            Aspect="AspectFill"
+                            HeightRequest="56"
+                            WidthRequest="56" />
+
+                        <!-- Placeholder: first-letter tile, shown when there's no thumbnail -->
+                        <Border
+                            Grid.Column="0"
+                            IsVisible="{Binding HasThumbnail, Converter={StaticResource InvertedBoolConverter}}"
+                            HeightRequest="56"
+                            WidthRequest="56"
+                            StrokeShape="RoundRectangle 8"
+                            BackgroundColor="{StaticResource Primary}">
+                            <Label
+                                Text="{Binding PlaceholderLetter}"
+                                TextColor="White"
+                                FontSize="24"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center" />
+                        </Border>
+
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="{Binding Title}" FontAttributes="Bold" />
+                            <Label Text="{Binding AreaCity}" FontSize="13" TextColor="Gray" />
+                            <HorizontalStackLayout Spacing="8">
+                                <Label Text="{Binding Category}" FontSize="12" FontAttributes="Bold" TextColor="{StaticResource Secondary}" />
+                                <Label Text="{Binding StatusText}" FontSize="12" TextColor="{StaticResource Primary}" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+    </Grid>
+
+</ContentPage>

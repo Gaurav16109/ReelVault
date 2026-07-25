@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="ReelVault.App.MainPage">
+             x:Class="ReelVault.App.MainPage"
+             Title="Extract">
 
     <ScrollView>
         <VerticalStackLayout
@@ -9,18 +10,37 @@
             Spacing="16">
 
             <Label
-                Text="ReelVault — Food Extraction"
+                Text="ReelVault — Extraction"
                 Style="{StaticResource Headline}"
                 SemanticProperties.HeadingLevel="Level1" />
 
             <Label
-                Text="Paste a Reel caption below and extract structured food data. Phase 1: extraction only, nothing is saved."
+                Text="Paste a Reel caption below and extract structured data."
                 Style="{StaticResource SubHeadline}" />
+
+            <Label
+                x:Name="ShareHintLabel"
+                TextColor="{AppThemeBinding Light=DodgerBlue, Dark=SkyBlue}"
+                FontAttributes="Italic"
+                FontSize="13"
+                LineBreakMode="WordWrap"
+                IsVisible="False" />
+
+            <Label Text="Category" FontAttributes="Bold" />
+            <Picker x:Name="CategoryPicker" SelectedIndexChanged="OnCategoryChanged" />
 
             <Label Text="Reel URL (optional)" FontAttributes="Bold" />
             <Entry
                 x:Name="SourceUrlEntry"
-                Placeholder="https://instagram.com/reel/..." />
+                Placeholder="https://instagram.com/reel/..."
+                Unfocused="OnSourceUrlUnfocused" />
+
+            <Label
+                x:Name="UrlWarningLabel"
+                TextColor="Orange"
+                FontSize="13"
+                LineBreakMode="WordWrap"
+                IsVisible="False" />
 
             <Label Text="Caption text" FontAttributes="Bold" />
             <Editor
@@ -54,6 +74,23 @@
 
                 <Label Text="Summary" FontAttributes="Bold" Margin="0,12,0,0" />
                 <Label x:Name="SummaryLabel" LineBreakMode="WordWrap" />
+
+                <Button
+                    x:Name="SaveButton"
+                    Text="Save"
+                    Clicked="OnSaveClicked"
+                    HorizontalOptions="Fill"
+                    Margin="0,12,0,0" />
+
+                <ActivityIndicator
+                    x:Name="SaveLoadingIndicator"
+                    IsRunning="False"
+                    IsVisible="False" />
+
+                <Label
+                    x:Name="SaveStatusLabel"
+                    LineBreakMode="WordWrap"
+                    IsVisible="False" />
             </VerticalStackLayout>
 
         </VerticalStackLayout>

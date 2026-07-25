@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Allows plain HTTP (cleartext) only to the dev Mac's Wi-Fi IP - the API has no HTTPS cert for a
+  LAN IP, so this is the local-dev equivalent of Phase 0's ATS/localhost exemption on Catalyst.
+  Scoped to this one IP only; everything else on the device still requires HTTPS as normal.
+  Update this domain to match your Mac's current `ipconfig getifaddr en0` if it changes - see
+  README "Phase 4a: Android" and MauiProgram.ApiBaseUrl, which must match.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.0.105</domain>
+    </domain-config>
+</network-security-config>

@@ -4,14 +4,15 @@ namespace ReelVault.Api.Extraction;
 
 public interface ILlmExtractor
 {
-    Task<LlmExtractionResult> ExtractFoodAsync(string captionText, string? sourceUrl);
+    Task<LlmExtractionResult<FoodExtraction>> ExtractFoodAsync(string captionText, string? sourceUrl);
+    Task<LlmExtractionResult<TravelExtraction>> ExtractTravelAsync(string captionText, string? sourceUrl);
 }
 
 // Carries the raw model text alongside the parsed data so the API can surface it in
 // ExtractionResponse.RawModelOutput (useful for judging extraction quality / debugging).
-public class LlmExtractionResult
+public class LlmExtractionResult<T>
 {
-    public required FoodExtraction Data { get; init; }
+    public required T Data { get; init; }
     public required string RawModelOutput { get; init; }
 }
 

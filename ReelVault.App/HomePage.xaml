@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:ReelVault.App"
+             x:Class="ReelVault.App.HomePage"
+             x:DataType="local:HomePage"
+             Title="ReelVault">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Extract New" Clicked="OnExtractNewClicked" />
+    </ContentPage.ToolbarItems>
+
+    <Grid RowDefinitions="Auto,Auto,*" Padding="20">
+
+        <Label
+            Grid.Row="0"
+            Text="What are you looking for?"
+            Style="{StaticResource Headline}" />
+
+        <ActivityIndicator
+            Grid.Row="1"
+            x:Name="LoadingIndicator"
+            IsRunning="False"
+            IsVisible="False" />
+
+        <Label
+            Grid.Row="1"
+            x:Name="ErrorLabel"
+            TextColor="Red"
+            LineBreakMode="WordWrap"
+            IsVisible="False" />
+
+        <CollectionView
+            Grid.Row="2"
+            x:Name="TilesCollectionView"
+            SelectionMode="Single"
+            SelectionChanged="OnTileSelected"
+            Margin="0,16,0,0">
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" Span="2" HorizontalItemSpacing="12" VerticalItemSpacing="12" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="local:CategoryTile">
+                    <Border StrokeShape="RoundRectangle 12" BackgroundColor="{StaticResource Primary}" HeightRequest="100">
+                        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="4">
+                            <Label Text="{Binding DisplayName}" TextColor="White" FontAttributes="Bold" FontSize="18" HorizontalOptions="Center" />
+                            <Label Text="{Binding Count}" TextColor="White" FontSize="14" HorizontalOptions="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+    </Grid>
+
+</ContentPage>

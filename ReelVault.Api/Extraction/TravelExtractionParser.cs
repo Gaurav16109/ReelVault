@@ -3,24 +3,23 @@ using ReelVault.Shared;
 
 namespace ReelVault.Api.Extraction;
 
-// Provider-agnostic parsing/mapping for LLM output shaped like FoodExtraction's JSON schema.
-// Pure, synchronous, network-free — kept separate from any specific ILlmExtractor implementation
-// (e.g. GeminiFoodExtractor) so it stays unit-testable and reusable by future providers.
-public static class FoodExtractionParser
+// Provider-agnostic parsing/mapping for LLM output shaped like TravelExtraction's JSON schema.
+// Pure, synchronous, network-free — mirrors FoodExtractionParser.
+public static class TravelExtractionParser
 {
     private static readonly JsonSerializerOptions ModelOutputJsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public static FoodExtraction ParseModelOutput(string rawModelOutput)
+    public static TravelExtraction ParseModelOutput(string rawModelOutput)
     {
         var cleanedJson = CodeFenceStripper.Strip(rawModelOutput);
 
-        FoodExtraction? data;
+        TravelExtraction? data;
         try
         {
-            data = JsonSerializer.Deserialize<FoodExtraction>(cleanedJson, ModelOutputJsonOptions);
+            data = JsonSerializer.Deserialize<TravelExtraction>(cleanedJson, ModelOutputJsonOptions);
         }
         catch (JsonException ex)
         {
@@ -42,21 +41,20 @@ public static class FoodExtractionParser
         return data;
     }
 
-    public static List<string> ComputeNotMentionedFields(FoodExtraction data)
+    public static List<string> ComputeNotMentionedFields(TravelExtraction data)
     {
         var notMentioned = new List<string>();
 
-        if (data.Name is null) notMentioned.Add(nameof(data.Name));
+        if (data.PlaceName is null) notMentioned.Add(nameof(data.PlaceName));
         if (data.Area is null) notMentioned.Add(nameof(data.Area));
         if (data.City is null) notMentioned.Add(nameof(data.City));
-        if (data.Cuisine is null) notMentioned.Add(nameof(data.Cuisine));
-        if (data.PriceRange is null) notMentioned.Add(nameof(data.PriceRange));
-        if (data.MustTry is null or { Count: 0 }) notMentioned.Add(nameof(data.MustTry));
-        if (data.Rating is null) notMentioned.Add(nameof(data.Rating));
-        if (data.OpeningHours is null) notMentioned.Add(nameof(data.OpeningHours));
+        if (data.PlaceType is null) notMentioned.Add(nameof(data.PlaceType));
+        if (data.BestTimeToVisit is null) notMentioned.Add(nameof(data.BestTimeToVisit));
+        if (data.EstimatedCost is null) notMentioned.Add(nameof(data.EstimatedCost));
+        if (data.Highlights is null or { Count: 0 }) notMentioned.Add(nameof(data.Highlights));
+        if (data.Activities is null or { Count: 0 }) notMentioned.Add(nameof(data.Activities));
         if (data.MapQuery is null) notMentioned.Add(nameof(data.MapQuery));
-        if (data.VegOptions is null) notMentioned.Add(nameof(data.VegOptions));
-        if (data.Parking is null) notMentioned.Add(nameof(data.Parking));
+        if (data.NearbyPlaces is null or { Count: 0 }) notMentioned.Add(nameof(data.NearbyPlaces));
 
         return notMentioned;
     }
