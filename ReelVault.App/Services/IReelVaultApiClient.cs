@@ -19,4 +19,9 @@ public interface IReelVaultApiClient
     Task DeleteItemAsync(Guid id);
     Task<List<CategoryCount>> GetCategoriesAsync();
     Task<LocationsResult> GetLocationsAsync(string? category = null);
+
+    // On-demand only - never called automatically. Throws on a genuine failure (network, or the
+    // API's 502 when Places itself failed); a "no confident match" result is NOT an exception, it's
+    // a normal EnrichItemResponse with Enriched = false.
+    Task<EnrichItemResponse> EnrichItemAsync(Guid id);
 }

@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using ReelVault.Api.Controllers;
+using ReelVault.Api.Enrichment;
 using ReelVault.Api.Thumbnails;
 using ReelVault.Shared;
 
@@ -15,8 +17,9 @@ public class ItemsControllerTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-    private static ItemsController CreateController(ReelVaultDbContext db, IThumbnailFetcher? thumbnailFetcher = null) =>
-        new(db, thumbnailFetcher ?? new NullThumbnailFetcher(), NullLogger<ItemsController>.Instance);
+    private static ItemsController CreateController(
+        ReelVaultDbContext db, IThumbnailFetcher? thumbnailFetcher = null, IPlaceEnricher? placeEnricher = null) =>
+        new(db, thumbnailFetcher ?? new NullThumbnailFetcher(), placeEnricher ?? new FakePlaceEnricher(), NullLogger<ItemsController>.Instance);
 
     private static SaveItemRequest MakeRequest(string title = "Spice Route", string? sourceUrl = "https://instagram.com/reel/abc123", string area = "Koramangala") =>
         new()
@@ -319,8 +322,177 @@ public class ItemsControllerTests
         Assert.Equal("Dudhsagar Falls", item.Title);
     }
 
+    // --- Enrichment endpoint tests (POST /api/items/{id}/enrich) - no live Places calls, a fake
+    // IPlaceEnricher stands in so these exercise only the controller's persistence/response logic. ---
+
+    [Fact]
+    public async Task Enrich_HighConfidence_StoresEnrichmentDataAndLeavesExtractedDataUntouched()
+    {
+        // Arrange
+        using var db = CreateContext();
+        var enrichedAt = new DateTime(2026, 7, 25, 12, 0, 0, DateTimeKind.Utc);
+        var enrichmentData = new EnrichmentData
+        {
+            PlaceId = "place123",
+            MatchedPlaceName = "Toit Brewpub",
+            Address = "100 Feet Road, Indiranagar, Bangalore",
+            Rating = 4.4,
+            UserRatingCount = 12000,
+            PriceLevel = "Moderate",
+            Types = ["restaurant", "bar"],
+            OpeningHours = ["Monday: 12:00 PM – 1:00 AM"],
+            Latitude = 12.9716,
+            Longitude = 77.6412,
+            GoogleMapsUri = "https://maps.google.com/?cid=123",
+            Confidence = EnrichmentConfidence.High,
+            EnrichedAt = enrichedAt
+        };
+        var controller = CreateController(db, placeEnricher: new FakePlaceEnricher(
+            new EnrichmentResult { Confidence = EnrichmentConfidence.High, Data = enrichmentData, Message = "Enriched from Google Places." }));
+
+        var saveResult = await controller.Save(MakeRequest());
+        var saved = Assert.IsType<SaveItemResult>(((CreatedAtActionResult)saveResult.Result!).Value).Item!;
+
+        // Act
+        var enrichResult = await controller.Enrich(saved.Id);
+
+        // Assert
+        var body = Assert.IsType<EnrichItemResponse>(enrichResult.Value);
+        Assert.True(body.Enriched);
+        Assert.Equal(EnrichmentConfidence.High, body.Confidence);
+        Assert.NotNull(body.Item.Enrichment);
+        Assert.Equal("Toit Brewpub", body.Item.Enrichment!.MatchedPlaceName);
+        Assert.Equal(4.4, body.Item.Enrichment.Rating);
+        Assert.Equal("https://maps.google.com/?cid=123", body.Item.Enrichment.GoogleMapsUri);
+        Assert.Equal(EnrichmentStatus.Enriched, body.Item.EnrichmentStatus);
+        Assert.NotNull(body.Item.EnrichedAt);
+
+        // Original extracted data must be untouched.
+        Assert.Equal("Spice Route", body.Item.Title);
+        Assert.NotNull(body.Item.FoodData);
+        Assert.Equal("Koramangala", body.Item.FoodData!.Area);
+    }
+
+    [Fact]
+    public async Task Enrich_MediumOrLowConfidence_DoesNotAutoFillAndRecordsNoConfidentMatch()
+    {
+        // Arrange
+        using var db = CreateContext();
+        var controller = CreateController(db, placeEnricher: new FakePlaceEnricher(
+            new EnrichmentResult
+            {
+                Confidence = EnrichmentConfidence.Medium,
+                Candidates = [new PlaceCandidate { PlaceId = "a", Name = "Spice Route Diner" }, new PlaceCandidate { PlaceId = "b", Name = "Spice Route Cafe" }],
+                Message = "Couldn't confidently match this place — you can add details manually."
+            }));
+
+        var saveResult = await controller.Save(MakeRequest());
+        var saved = Assert.IsType<SaveItemResult>(((CreatedAtActionResult)saveResult.Result!).Value).Item!;
+
+        // Act
+        var enrichResult = await controller.Enrich(saved.Id);
+
+        // Assert
+        var body = Assert.IsType<EnrichItemResponse>(enrichResult.Value);
+        Assert.False(body.Enriched);
+        Assert.Equal(EnrichmentConfidence.Medium, body.Confidence);
+        Assert.Null(body.Item.Enrichment);
+        Assert.Equal(EnrichmentStatus.NoConfidentMatch, body.Item.EnrichmentStatus);
+        Assert.Equal(2, body.Candidates.Count);
+
+        // Original extracted data must still be untouched.
+        Assert.Equal("Spice Route", body.Item.Title);
+        Assert.Equal("Koramangala", body.Item.FoodData!.Area);
+    }
+
+    [Fact]
+    public async Task Enrich_PlacesApiError_LeavesItemCompletelyUnchangedAndReturnsProblem()
+    {
+        // Arrange
+        using var db = CreateContext();
+        var controller = CreateController(db, placeEnricher: new FakePlaceEnricher(
+            new EnrichmentResult { IsError = true, Confidence = EnrichmentConfidence.None, Message = "Places API returned 429 TooManyRequests." }));
+
+        var saveResult = await controller.Save(MakeRequest());
+        var saved = Assert.IsType<SaveItemResult>(((CreatedAtActionResult)saveResult.Result!).Value).Item!;
+
+        // Act
+        var enrichResult = await controller.Enrich(saved.Id);
+
+        // Assert: a Problem response, not a thrown exception or a corrupted item.
+        var objectResult = Assert.IsType<ObjectResult>(enrichResult.Result);
+        Assert.Equal(StatusCodes.Status502BadGateway, objectResult.StatusCode);
+
+        var detailResult = await controller.GetById(saved.Id);
+        var detail = Assert.IsType<SavedItemDetailDto>(detailResult.Value);
+        Assert.Equal(EnrichmentStatus.NotEnriched, detail.EnrichmentStatus);
+        Assert.Null(detail.Enrichment);
+        Assert.Null(detail.EnrichedAt);
+        Assert.Equal("Spice Route", detail.Title);
+        Assert.Equal("Koramangala", detail.FoodData!.Area);
+    }
+
+    [Fact]
+    public async Task Enrich_ThrowingEnricher_ReturnsProblemInsteadOfPropagatingAndLeavesItemUnchanged()
+    {
+        // Arrange: simulates an unexpected exception (e.g. a network-level failure) rather than a
+        // handled IsError result - the controller must still degrade gracefully.
+        using var db = CreateContext();
+        var controller = CreateController(db, placeEnricher: new ThrowingPlaceEnricher());
+
+        var saveResult = await controller.Save(MakeRequest());
+        var saved = Assert.IsType<SaveItemResult>(((CreatedAtActionResult)saveResult.Result!).Value).Item!;
+
+        // Act
+        var enrichResult = await controller.Enrich(saved.Id);
+
+        // Assert
+        var objectResult = Assert.IsType<ObjectResult>(enrichResult.Result);
+        Assert.Equal(StatusCodes.Status502BadGateway, objectResult.StatusCode);
+
+        var detailResult = await controller.GetById(saved.Id);
+        var detail = Assert.IsType<SavedItemDetailDto>(detailResult.Value);
+        Assert.Equal(EnrichmentStatus.NotEnriched, detail.EnrichmentStatus);
+        Assert.Equal("Spice Route", detail.Title);
+    }
+
+    [Fact]
+    public async Task Enrich_NoResultsFromPlaces_RecordsNoConfidentMatchWithoutFabricatingFields()
+    {
+        // Arrange
+        using var db = CreateContext();
+        var controller = CreateController(db, placeEnricher: new FakePlaceEnricher(
+            new EnrichmentResult { Confidence = EnrichmentConfidence.None, Candidates = [], Message = "Google Places returned no results for this place." }));
+
+        var saveResult = await controller.Save(MakeRequest(title: "Xzqwplorp Nonsense Place Name"));
+        var saved = Assert.IsType<SaveItemResult>(((CreatedAtActionResult)saveResult.Result!).Value).Item!;
+
+        // Act
+        var enrichResult = await controller.Enrich(saved.Id);
+
+        // Assert
+        var body = Assert.IsType<EnrichItemResponse>(enrichResult.Value);
+        Assert.False(body.Enriched);
+        Assert.Equal(EnrichmentConfidence.None, body.Confidence);
+        Assert.Null(body.Item.Enrichment);
+        Assert.Equal(EnrichmentStatus.NoConfidentMatch, body.Item.EnrichmentStatus);
+        Assert.Empty(body.Candidates);
+    }
+
     private class NullThumbnailFetcher : IThumbnailFetcher
     {
         public Task<string?> TryFetchThumbnailUrlAsync(string? sourceUrl) => Task.FromResult<string?>(null);
+    }
+
+    private class FakePlaceEnricher(EnrichmentResult? result = null) : IPlaceEnricher
+    {
+        public Task<EnrichmentResult> EnrichAsync(string placeName, string? area, string? city, string category) =>
+            Task.FromResult(result ?? new EnrichmentResult { Confidence = EnrichmentConfidence.None, Message = "No match configured for this test." });
+    }
+
+    private class ThrowingPlaceEnricher : IPlaceEnricher
+    {
+        public Task<EnrichmentResult> EnrichAsync(string placeName, string? area, string? city, string category) =>
+            throw new HttpRequestException("Simulated network failure.");
     }
 }

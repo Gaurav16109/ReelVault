@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using ReelVault.Api;
+using ReelVault.Api.Enrichment;
 using ReelVault.Api.Extraction;
 using ReelVault.Api.Thumbnails;
 
@@ -27,6 +28,13 @@ builder.Services.AddHttpClient<ILlmExtractor, GeminiExtractor>(client =>
 builder.Services.AddHttpClient<IThumbnailFetcher, OEmbedThumbnailFetcher>(client =>
 {
     client.BaseAddress = new Uri("https://graph.facebook.com/");
+});
+
+// On-demand only (POST /api/items/{id}/enrich) - never called from the save path. Depend on
+// IPlaceEnricher everywhere so the engine stays swappable (see Enrichment/IPlaceEnricher.cs).
+builder.Services.AddHttpClient<IPlaceEnricher, GooglePlacesEnricher>(client =>
+{
+    client.BaseAddress = new Uri("https://places.googleapis.com/");
 });
 
 // Permissive for Phase 0 local development only; the MAUI app calls the API from a different origin/port.

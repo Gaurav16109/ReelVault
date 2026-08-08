@@ -20,4 +20,9 @@ public class SavedItemDetailDto
     public DateTime SavedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }
+
+    // From Google Places (Phase 5a), never merged into FoodData/TravelData - see EnrichmentData.
+    public EnrichmentData? Enrichment { get; set; }
+    public EnrichmentStatus EnrichmentStatus { get; set; }
+    public DateTime? EnrichedAt { get; set; }
 }

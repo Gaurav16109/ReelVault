@@ -94,6 +94,48 @@
 
                 <BoxView HeightRequest="1" Color="LightGray" Margin="0,8" />
 
+                <Button x:Name="EnrichButton" Text="Enrich with Google" Clicked="OnEnrichClicked" HorizontalOptions="Fill" />
+                <ActivityIndicator x:Name="EnrichLoadingIndicator" IsRunning="False" IsVisible="False" />
+
+                <Label
+                    x:Name="EnrichMessageLabel"
+                    TextColor="Gray"
+                    FontAttributes="Italic"
+                    LineBreakMode="WordWrap"
+                    IsVisible="False" />
+
+                <!-- Enriched fields from Google Places - visually distinct from the reel-extracted
+                     fields above, and never merged into them (see DetailPage.xaml.cs PopulateEnrichment). -->
+                <VerticalStackLayout
+                    x:Name="EnrichmentPanel"
+                    Spacing="6"
+                    IsVisible="False"
+                    BackgroundColor="{AppThemeBinding Light=#EEF3FF, Dark=#1C2440}"
+                    Padding="12">
+
+                    <Label Text="From Google" FontAttributes="Bold" FontSize="16" TextColor="{StaticResource Secondary}" />
+
+                    <Label x:Name="EnrichedNameLabel" FontAttributes="Bold" LineBreakMode="WordWrap" />
+                    <Label x:Name="EnrichedAddressLabel" LineBreakMode="WordWrap" />
+                    <Label x:Name="EnrichedRatingLabel" />
+                    <Label x:Name="EnrichedPriceLabel" />
+                    <Label x:Name="EnrichedTypesLabel" LineBreakMode="WordWrap" />
+                    <Label x:Name="EnrichedHoursLabel" LineBreakMode="WordWrap" />
+
+                    <Label
+                        x:Name="EnrichedMapsLinkLabel"
+                        Text="Open in Google Maps"
+                        TextColor="DodgerBlue"
+                        TextDecorations="Underline"
+                        IsVisible="False">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnMapsLinkTapped" />
+                        </Label.GestureRecognizers>
+                    </Label>
+                </VerticalStackLayout>
+
+                <BoxView HeightRequest="1" Color="LightGray" Margin="0,8" />
+
                 <Label Text="Your notes" FontAttributes="Bold" />
                 <Editor x:Name="UserNotesEditor" AutoSize="TextChanges" MinimumHeightRequest="80" />
 

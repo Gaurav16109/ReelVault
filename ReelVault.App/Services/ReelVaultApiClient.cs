@@ -109,6 +109,19 @@ public class ReelVaultApiClient(HttpClient httpClient) : IReelVaultApiClient
         }
     }
 
+    public async Task<EnrichItemResponse> EnrichItemAsync(Guid id)
+    {
+        var response = await httpClient.PostAsync($"api/items/{id}/enrich", content: null);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadErrorMessageAsync(response));
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<EnrichItemResponse>(JsonOptions);
+        return result ?? throw new InvalidOperationException("API returned an empty response.");
+    }
+
     public async Task<List<CategoryCount>> GetCategoriesAsync()
     {
         var result = await httpClient.GetFromJsonAsync<List<CategoryCount>>("api/items/categories", JsonOptions);

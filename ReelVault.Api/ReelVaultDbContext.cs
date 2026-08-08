@@ -17,6 +17,11 @@ public class ReelVaultDbContext(DbContextOptions<ReelVaultDbContext> options) : 
         {
             entity.Property(e => e.CategoryData).HasColumnType("jsonb");
             entity.Property(e => e.Status).HasConversion<string>();
+            entity.Property(e => e.EnrichmentData).HasColumnType("jsonb");
+            // Explicit default so adding this column to a table with existing rows backfills
+            // "NotEnriched" (not an empty string that wouldn't parse back to the enum) - see
+            // Migrations/AddEnrichment.
+            entity.Property(e => e.EnrichmentStatus).HasConversion<string>().HasDefaultValue(EnrichmentStatus.NotEnriched);
             entity.HasIndex(e => e.IsDeleted);
             entity.HasIndex(e => e.SavedAt);
             entity.HasIndex(e => e.Category);

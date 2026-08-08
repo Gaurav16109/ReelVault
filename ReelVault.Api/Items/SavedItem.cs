@@ -36,6 +36,13 @@ public class SavedItem
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }
 
+    // Google Places enrichment (Phase 5a), stored separately from CategoryData/RawModelOutput -
+    // never overwrites the reel-extracted fields. Raw JSON text mapped to a jsonb column, same
+    // pattern as CategoryData; null until the first enrich attempt.
+    public string? EnrichmentData { get; set; }
+    public EnrichmentStatus EnrichmentStatus { get; set; } = EnrichmentStatus.NotEnriched;
+    public DateTime? EnrichedAt { get; set; }
+
     // Postgres-computed (GENERATED ALWAYS AS ... STORED) generated tsvector column over
     // Title/Summary/Area/City/CategoryData text fields - see ReelVaultDbContext.OnModelCreating.
     // Never set from C#; read-only from EF's perspective.

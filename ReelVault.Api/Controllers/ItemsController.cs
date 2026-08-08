@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ReelVault.Api.Enrichment;
 using ReelVault.Api.Items;
 using ReelVault.Api.Thumbnails;
 using ReelVault.Shared;
@@ -8,7 +9,11 @@ namespace ReelVault.Api.Controllers;
 
 [ApiController]
 [Route("api/items")]
-public class ItemsController(ReelVaultDbContext db, IThumbnailFetcher thumbnailFetcher, ILogger<ItemsController> logger)
+public class ItemsController(
+    ReelVaultDbContext db,
+    IThumbnailFetcher thumbnailFetcher,
+    IPlaceEnricher placeEnricher,
+    ILogger<ItemsController> logger)
     : ControllerBase
 {
     [HttpPost]
@@ -177,6 +182,68 @@ public class ItemsController(ReelVaultDbContext db, IThumbnailFetcher thumbnailF
         return NoContent();
     }
 
+    // On-demand only (never runs on save). High confidence auto-fills EnrichmentData; anything
+    // else (Medium/Low/None) records NoConfidentMatch and never touches CategoryData/RawModelOutput.
+    // A Places failure (IsError) leaves the item completely untouched - only a Problem is returned.
+    [HttpPost("{id:guid}/enrich")]
+    public async Task<ActionResult<EnrichItemResponse>> Enrich(Guid id)
+    {
+        var entity = await db.SavedItems.FindAsync(id);
+        if (entity is null)
+        {
+            return Problem(title: "Item not found.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        if (string.IsNullOrWhiteSpace(entity.Title))
+        {
+            return Problem(title: "This item has no title to search Google Places for.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        EnrichmentResult result;
+        try
+        {
+            result = await placeEnricher.EnrichAsync(entity.Title, entity.Area, entity.City, entity.Category);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Enrichment threw unexpectedly for item {ItemId}; item left unchanged.", id);
+            return Problem(
+                title: "Enrichment failed.",
+                detail: "Could not reach Google Places right now. Try again later.",
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        if (result.IsError)
+        {
+            logger.LogWarning("Places enrichment error for item {ItemId}: {Message}", id, result.Message);
+            return Problem(title: "Enrichment failed.", detail: result.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        if (result.Confidence == EnrichmentConfidence.High && result.Data is not null)
+        {
+            entity.EnrichmentData = EnrichmentDataSerializer.Serialize(result.Data);
+            entity.EnrichmentStatus = EnrichmentStatus.Enriched;
+            entity.EnrichedAt = result.Data.EnrichedAt;
+        }
+        else
+        {
+            entity.EnrichmentStatus = EnrichmentStatus.NoConfidentMatch;
+            entity.EnrichedAt = DateTime.UtcNow;
+        }
+
+        entity.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return new EnrichItemResponse
+        {
+            Item = ToDetailDto(entity),
+            Enriched = entity.EnrichmentStatus == EnrichmentStatus.Enriched,
+            Confidence = result.Confidence,
+            Message = result.Message,
+            Candidates = result.Candidates
+        };
+    }
+
     private async Task<ActionResult<List<SavedItemListDto>>> QueryItems(string? q, string? category, string? city, string? area)
     {
         var query = db.SavedItems.Where(i => !i.IsDeleted);
@@ -247,6 +314,9 @@ public class ItemsController(ReelVaultDbContext db, IThumbnailFetcher thumbnailF
         TravelData = entity.Category == "Travel" ? CategoryDataSerializer.DeserializeTravel(entity.CategoryData) : null,
         SavedAt = entity.SavedAt,
         UpdatedAt = entity.UpdatedAt,
-        IsDeleted = entity.IsDeleted
+        IsDeleted = entity.IsDeleted,
+        Enrichment = EnrichmentDataSerializer.Deserialize(entity.EnrichmentData),
+        EnrichmentStatus = entity.EnrichmentStatus,
+        EnrichedAt = entity.EnrichedAt
     };
 }
