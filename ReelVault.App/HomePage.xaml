@@ -8,6 +8,7 @@
 
     <ContentPage.ToolbarItems>
         <ToolbarItem Text="Extract New" Clicked="OnExtractNewClicked" />
+        <ToolbarItem Text="Settings" Clicked="OnSettingsClicked" />
     </ContentPage.ToolbarItems>
 
     <Grid RowDefinitions="Auto,Auto,*" Padding="20">

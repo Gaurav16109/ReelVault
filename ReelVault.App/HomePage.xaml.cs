@@ -62,4 +62,10 @@ public partial class HomePage : ContentPage
         var mainPage = _services.GetRequiredService<MainPage>();
         await Navigation.PushAsync(mainPage);
     }
+
+    private async void OnSettingsClicked(object sender, EventArgs e)
+    {
+        var settingsPage = _services.GetRequiredService<SettingsPage>();
+        await Navigation.PushAsync(settingsPage);
+    }
 }

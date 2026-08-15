@@ -479,6 +479,62 @@ public class ItemsControllerTests
         Assert.Empty(body.Candidates);
     }
 
+    [Fact]
+    public async Task Enrich_NameAndLocationEntrySave_PassesLocationParserOutputThroughToThePlaceEnricher()
+    {
+        // Arrange: mirrors the no-caption "place name + location" save path exactly - MainPage
+        // splits the freeform Location field with LocationParser before building FoodData, the
+        // same as here.
+        using var db = CreateContext();
+        var fakeEnricher = new FakePlaceEnricher(new EnrichmentResult { Confidence = EnrichmentConfidence.None, Message = "No match." });
+        var controller = CreateController(db, placeEnricher: fakeEnricher);
+
+        var (area, city) = LocationParser.Parse("Indiranagar, Bangalore");
+        var saveRequest = new SaveItemRequest
+        {
+            Category = "Food",
+            Title = "Toit Brewpub",
+            FoodData = new FoodExtraction { Name = "Toit Brewpub", Area = area, City = city }
+        };
+        var saveResult = await controller.Save(saveRequest);
+        var saved = Assert.IsType<SaveItemResult>(((CreatedAtActionResult)saveResult.Result!).Value).Item!;
+
+        // Act
+        await controller.Enrich(saved.Id);
+
+        // Assert: the location the user typed made it all the way into the enrichment call.
+        Assert.Equal("Toit Brewpub", fakeEnricher.LastPlaceName);
+        Assert.Equal("Indiranagar", fakeEnricher.LastArea);
+        Assert.Equal("Bangalore", fakeEnricher.LastCity);
+    }
+
+    [Fact]
+    public async Task Enrich_NameAndLocationEntryWithJustCity_StillPassesCityThroughWithNullArea()
+    {
+        // Arrange: location is never required to be fully specified - "just a city" must still work.
+        using var db = CreateContext();
+        var fakeEnricher = new FakePlaceEnricher(new EnrichmentResult { Confidence = EnrichmentConfidence.None, Message = "No match." });
+        var controller = CreateController(db, placeEnricher: fakeEnricher);
+
+        var (area, city) = LocationParser.Parse("Bangalore");
+        var saveRequest = new SaveItemRequest
+        {
+            Category = "Food",
+            Title = "Some Cafe",
+            FoodData = new FoodExtraction { Name = "Some Cafe", Area = area, City = city }
+        };
+        var saveResult = await controller.Save(saveRequest);
+        var saved = Assert.IsType<SaveItemResult>(((CreatedAtActionResult)saveResult.Result!).Value).Item!;
+
+        // Act
+        await controller.Enrich(saved.Id);
+
+        // Assert
+        Assert.Equal("Some Cafe", fakeEnricher.LastPlaceName);
+        Assert.Null(fakeEnricher.LastArea);
+        Assert.Equal("Bangalore", fakeEnricher.LastCity);
+    }
+
     private class NullThumbnailFetcher : IThumbnailFetcher
     {
         public Task<string?> TryFetchThumbnailUrlAsync(string? sourceUrl) => Task.FromResult<string?>(null);
@@ -486,8 +542,17 @@ public class ItemsControllerTests
 
     private class FakePlaceEnricher(EnrichmentResult? result = null) : IPlaceEnricher
     {
-        public Task<EnrichmentResult> EnrichAsync(string placeName, string? area, string? city, string category) =>
-            Task.FromResult(result ?? new EnrichmentResult { Confidence = EnrichmentConfidence.None, Message = "No match configured for this test." });
+        public string? LastPlaceName { get; private set; }
+        public string? LastArea { get; private set; }
+        public string? LastCity { get; private set; }
+
+        public Task<EnrichmentResult> EnrichAsync(string placeName, string? area, string? city, string category)
+        {
+            LastPlaceName = placeName;
+            LastArea = area;
+            LastCity = city;
+            return Task.FromResult(result ?? new EnrichmentResult { Confidence = EnrichmentConfidence.None, Message = "No match configured for this test." });
+        }
     }
 
     private class ThrowingPlaceEnricher : IPlaceEnricher

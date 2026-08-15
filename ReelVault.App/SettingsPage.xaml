@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ReelVault.App.SettingsPage"
+             Title="Settings">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="30,20" Spacing="16">
+
+            <Label
+                Text="API Connection"
+                Style="{StaticResource Headline}"
+                SemanticProperties.HeadingLevel="Level1" />
+
+            <Label
+                Text="The address ReelVault uses to reach the API. Change this if your Mac's network address changes - no rebuild needed, just Save."
+                Style="{StaticResource SubHeadline}" />
+
+            <Label Text="Currently active" FontAttributes="Bold" />
+            <Label x:Name="CurrentBaseUrlLabel" LineBreakMode="WordWrap" />
+
+            <Label Text="API base URL" FontAttributes="Bold" Margin="0,12,0,0" />
+            <Entry x:Name="BaseUrlEntry" Placeholder="http://192.168.x.x:5235" Keyboard="Url" />
+
+            <Label
+                x:Name="ErrorLabel"
+                TextColor="Red"
+                LineBreakMode="WordWrap"
+                IsVisible="False" />
+
+            <Label
+                x:Name="SavedLabel"
+                TextColor="Green"
+                LineBreakMode="WordWrap"
+                IsVisible="False" />
+
+            <Button x:Name="SaveButton" Text="Save" Clicked="OnSaveClicked" HorizontalOptions="Fill" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

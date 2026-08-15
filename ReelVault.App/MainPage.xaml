@@ -10,12 +10,12 @@
             Spacing="16">
 
             <Label
-                Text="ReelVault — Extraction"
+                Text="ReelVault — Add a Reel"
                 Style="{StaticResource Headline}"
                 SemanticProperties.HeadingLevel="Level1" />
 
             <Label
-                Text="Paste a Reel caption below and extract structured data."
+                Text="Enter the place name and location, or paste a full caption below for richer extraction."
                 Style="{StaticResource SubHeadline}" />
 
             <Label
@@ -42,55 +42,105 @@
                 LineBreakMode="WordWrap"
                 IsVisible="False" />
 
-            <Label Text="Caption text" FontAttributes="Bold" />
-            <Editor
-                x:Name="CaptionEditor"
-                Placeholder="Paste the Reel caption here..."
-                AutoSize="TextChanges"
-                MinimumHeightRequest="120" />
+            <BoxView HeightRequest="1" Color="LightGray" Margin="0,4" />
+
+            <!-- Primary path: most shared reels arrive with a URL but no caption (Instagram
+                 captions can't be copied from the share sheet), so name + location entry - not
+                 caption pasting - is the default way to add a reel. See MainPage.xaml.cs
+                 PrefillFromShare / OnSaveAndEnrichClicked. -->
+            <Label
+                Text="Enter the place name and location from the reel — we'll fetch the details."
+                FontAttributes="Bold" />
+
+            <Label Text="Place name" FontAttributes="Bold" />
+            <Entry x:Name="PlaceNameEntry" Placeholder="Place name (required)" />
+
+            <Label Text="Location (area, city)" FontAttributes="Bold" />
+            <Entry x:Name="LocationEntry" Placeholder="e.g. Indiranagar, Bangalore — optional, any detail helps" />
 
             <Button
-                x:Name="ExtractButton"
-                Text="Extract"
-                Clicked="OnExtractClicked"
+                x:Name="SaveAndEnrichButton"
+                Text="Save &amp; Enrich"
+                Clicked="OnSaveAndEnrichClicked"
                 HorizontalOptions="Fill" />
 
             <ActivityIndicator
-                x:Name="LoadingIndicator"
+                x:Name="SaveAndEnrichLoadingIndicator"
                 IsRunning="False"
                 IsVisible="False" />
 
             <Label
-                x:Name="ErrorLabel"
+                x:Name="NameLocationErrorLabel"
                 TextColor="Red"
                 LineBreakMode="WordWrap"
                 IsVisible="False" />
 
-            <BoxView HeightRequest="1" Color="LightGray" />
+            <BoxView HeightRequest="1" Color="LightGray" Margin="0,4" />
 
-            <VerticalStackLayout x:Name="ResultsPanel" Spacing="8" IsVisible="False">
-                <Label Text="Extracted data" FontAttributes="Bold" FontSize="18" />
-                <VerticalStackLayout x:Name="FieldsContainer" Spacing="4" />
+            <!-- Secondary path: only worth expanding when a full caption is actually available -
+                 collapsed by default, auto-expanded by PrefillFromShare when a share arrives with
+                 caption text. Everything inside is unchanged full-extraction behavior. -->
+            <Button
+                x:Name="CaptionSectionToggleButton"
+                Text="Have a full caption? Paste it here (optional)"
+                Clicked="OnToggleCaptionSectionClicked"
+                HorizontalOptions="Start"
+                BackgroundColor="Transparent"
+                TextColor="{StaticResource Secondary}" />
 
-                <Label Text="Summary" FontAttributes="Bold" Margin="0,12,0,0" />
-                <Label x:Name="SummaryLabel" LineBreakMode="WordWrap" />
+            <VerticalStackLayout x:Name="CaptionSection" Spacing="16" IsVisible="False">
+
+                <Label Text="Caption text (optional — paste if you have it)" FontAttributes="Bold" />
+                <Editor
+                    x:Name="CaptionEditor"
+                    Placeholder="Paste the Reel caption here..."
+                    AutoSize="TextChanges"
+                    MinimumHeightRequest="120" />
 
                 <Button
-                    x:Name="SaveButton"
-                    Text="Save"
-                    Clicked="OnSaveClicked"
-                    HorizontalOptions="Fill"
-                    Margin="0,12,0,0" />
+                    x:Name="ExtractButton"
+                    Text="Extract"
+                    Clicked="OnExtractClicked"
+                    HorizontalOptions="Fill" />
 
                 <ActivityIndicator
-                    x:Name="SaveLoadingIndicator"
+                    x:Name="LoadingIndicator"
                     IsRunning="False"
                     IsVisible="False" />
 
                 <Label
-                    x:Name="SaveStatusLabel"
+                    x:Name="ErrorLabel"
+                    TextColor="Red"
                     LineBreakMode="WordWrap"
                     IsVisible="False" />
+
+                <BoxView HeightRequest="1" Color="LightGray" />
+
+                <VerticalStackLayout x:Name="ResultsPanel" Spacing="8" IsVisible="False">
+                    <Label Text="Extracted data" FontAttributes="Bold" FontSize="18" />
+                    <VerticalStackLayout x:Name="FieldsContainer" Spacing="4" />
+
+                    <Label Text="Summary" FontAttributes="Bold" Margin="0,12,0,0" />
+                    <Label x:Name="SummaryLabel" LineBreakMode="WordWrap" />
+
+                    <Button
+                        x:Name="SaveButton"
+                        Text="Save"
+                        Clicked="OnSaveClicked"
+                        HorizontalOptions="Fill"
+                        Margin="0,12,0,0" />
+
+                    <ActivityIndicator
+                        x:Name="SaveLoadingIndicator"
+                        IsRunning="False"
+                        IsVisible="False" />
+
+                    <Label
+                        x:Name="SaveStatusLabel"
+                        LineBreakMode="WordWrap"
+                        IsVisible="False" />
+                </VerticalStackLayout>
+
             </VerticalStackLayout>
 
         </VerticalStackLayout>

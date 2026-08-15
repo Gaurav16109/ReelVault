@@ -37,22 +37,23 @@ public partial class MainPage : ContentPage
             SourceUrlEntry.Text = content.Url;
         }
 
-        if (!string.IsNullOrWhiteSpace(content.Caption))
+        // Most shared reels arrive this way: a URL, no caption (Instagram doesn't let you copy a
+        // caption from the share sheet) - lead with name+location entry rather than asking the
+        // user to go find caption text that usually isn't available.
+        if (ExtractionPathSelector.Choose(content.Caption) == ExtractionPathway.CaptionExtraction)
         {
             CaptionEditor.Text = content.Caption;
-        }
+            SetCaptionSectionExpanded(true);
 
-        if (!string.IsNullOrWhiteSpace(content.Url) && string.IsNullOrWhiteSpace(content.Caption))
-        {
-            ShowShareHint("Link shared from Instagram — paste the caption text below, then tap Extract.");
+            ShowShareHint(content.HasValidUrl
+                ? "Shared from Instagram — review the details below, then tap Extract."
+                : "Shared text didn't look like an Instagram link, so it's been added to the caption. Paste a link above if you have one.");
         }
-        else if (string.IsNullOrWhiteSpace(content.Url) && !string.IsNullOrWhiteSpace(content.Caption))
+        else
         {
-            ShowShareHint("Shared text didn't look like an Instagram link, so it's been added to the caption. Paste a link above if you have one.");
-        }
-        else if (!string.IsNullOrWhiteSpace(content.Url) && !string.IsNullOrWhiteSpace(content.Caption))
-        {
-            ShowShareHint("Shared from Instagram — review the details below, then tap Extract.");
+            ShowShareHint(!string.IsNullOrWhiteSpace(content.Url)
+                ? "Link shared from Instagram — enter the place name and location below, then Save & Enrich."
+                : "Nothing usable was shared — enter the place name and location below, then Save & Enrich.");
         }
     }
 
@@ -60,6 +61,134 @@ public partial class MainPage : ContentPage
     {
         ShareHintLabel.Text = message;
         ShareHintLabel.IsVisible = true;
+    }
+
+    private void OnToggleCaptionSectionClicked(object sender, EventArgs e) =>
+        SetCaptionSectionExpanded(!CaptionSection.IsVisible);
+
+    private void SetCaptionSectionExpanded(bool expanded)
+    {
+        CaptionSection.IsVisible = expanded;
+        CaptionSectionToggleButton.Text = expanded
+            ? "Hide caption entry"
+            : "Have a full caption? Paste it here (optional)";
+    }
+
+    // Primary, no-caption path: place name (required) + freeform location (optional, any
+    // granularity) -> minimal save -> immediate enrich -> land on the detail page's rich card.
+    // Reuses the same save/dedupe/enrich endpoints as the caption-extraction path unchanged.
+    private async void OnSaveAndEnrichClicked(object sender, EventArgs e)
+    {
+        var placeName = PlaceNameEntry.Text?.Trim();
+        var validationError = NameLocationEntryValidator.ValidatePlaceName(placeName);
+        if (validationError is not null)
+        {
+            ShowNameLocationError(validationError);
+            return;
+        }
+
+        HideNameLocationError();
+        SetNameLocationLoading(true);
+
+        try
+        {
+            var (area, city) = LocationParser.Parse(LocationEntry.Text);
+            var request = BuildNameLocationRequest(placeName!, area, city);
+
+            var result = await _apiClient.SaveItemAsync(request);
+
+            if (result.PossibleDuplicate)
+            {
+                await HandleNameLocationPossibleDuplicateAsync(result, request);
+                return;
+            }
+
+            await FinishSaveAndEnrichAsync(result.Item!.Id);
+        }
+        catch (Exception ex)
+        {
+            ShowNameLocationError(ex.Message);
+        }
+        finally
+        {
+            SetNameLocationLoading(false);
+        }
+    }
+
+    private SaveItemRequest BuildNameLocationRequest(string placeName, string? area, string? city) => new()
+    {
+        Category = SelectedCategory,
+        SourceUrl = SourceUrlEntry.Text,
+        Title = placeName,
+        FoodData = SelectedCategory == TravelCategory ? null : new FoodExtraction { Name = placeName, Area = area, City = city },
+        TravelData = SelectedCategory == TravelCategory ? new TravelExtraction { PlaceName = placeName, Area = area, City = city } : null
+    };
+
+    private async Task HandleNameLocationPossibleDuplicateAsync(SaveItemResult result, SaveItemRequest originalRequest)
+    {
+        var choice = await DisplayActionSheetAsync(
+            $"You already saved \"{result.ExistingItemTitle}\" — view it, or save this as a new item?",
+            "Cancel",
+            null,
+            "View existing", "Save anyway");
+
+        switch (choice)
+        {
+            case "Save anyway":
+                originalRequest.ForceSave = true;
+                var retryResult = await _apiClient.SaveItemAsync(originalRequest);
+                if (retryResult.Item is not null)
+                {
+                    await FinishSaveAndEnrichAsync(retryResult.Item.Id);
+                }
+                break;
+            case "View existing" when result.ExistingItemId is Guid existingId:
+                var detailPage = _services.GetRequiredService<DetailPage>();
+                await detailPage.InitializeAsync(existingId);
+                await Navigation.PushAsync(detailPage);
+                break;
+            default:
+                ShowNameLocationError("Not saved.");
+                break;
+        }
+    }
+
+    // Auto-triggers enrichment right after a minimal save so the flow completes in one tap:
+    // share -> name+location -> rich card. A failed auto-enrich must never block getting to the
+    // saved item - the detail page's own "Enrich with Google" button lets the user retry.
+    private async Task FinishSaveAndEnrichAsync(Guid savedId)
+    {
+        try
+        {
+            await _apiClient.EnrichItemAsync(savedId);
+        }
+        catch
+        {
+            // Ignored - see comment above.
+        }
+
+        var detailPage = _services.GetRequiredService<DetailPage>();
+        await detailPage.InitializeAsync(savedId);
+        await Navigation.PushAsync(detailPage);
+    }
+
+    private void SetNameLocationLoading(bool isLoading)
+    {
+        SaveAndEnrichLoadingIndicator.IsRunning = isLoading;
+        SaveAndEnrichLoadingIndicator.IsVisible = isLoading;
+        SaveAndEnrichButton.IsEnabled = !isLoading;
+    }
+
+    private void ShowNameLocationError(string message)
+    {
+        NameLocationErrorLabel.Text = message;
+        NameLocationErrorLabel.IsVisible = true;
+    }
+
+    private void HideNameLocationError()
+    {
+        NameLocationErrorLabel.Text = string.Empty;
+        NameLocationErrorLabel.IsVisible = false;
     }
 
     private void OnCategoryChanged(object sender, EventArgs e)
