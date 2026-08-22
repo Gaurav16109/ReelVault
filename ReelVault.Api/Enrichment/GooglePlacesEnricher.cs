@@ -10,8 +10,8 @@ namespace ReelVault.Api.Enrichment;
 // since nothing from them would be shown yet (Phase 5a has no picker).
 public class GooglePlacesEnricher : IPlaceEnricher
 {
-    private const string SearchFieldMask = "places.id,places.displayName,places.formattedAddress,places.location,places.rating";
-    private const string DetailsFieldMask = "id,displayName,formattedAddress,location,rating,userRatingCount,priceLevel,types,regularOpeningHours,googleMapsUri";
+    private const string SearchFieldMask = "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount";
+    private const string DetailsFieldMask = "id,displayName,formattedAddress,location,rating,userRatingCount,priceLevel,types,regularOpeningHours,googleMapsUri,photos";
 
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
@@ -54,10 +54,12 @@ public class GooglePlacesEnricher : IPlaceEnricher
             return new EnrichmentResult
             {
                 Confidence = match.Confidence,
-                Candidates = candidates,
-                Message = candidates.Count == 0
-                    ? "Google Places returned no results for this place."
-                    : "Couldn't confidently match this place — you can add details manually."
+                Candidates = match.ViableCandidates.ToList(),
+                Message = match.ViableCandidates.Count >= 2
+                    ? "We found a few places — which one?"
+                    : candidates.Count == 0
+                        ? "Google Places returned no results for this place."
+                        : "Couldn't confidently match this place — you can add details manually."
             };
         }
 
@@ -72,7 +74,7 @@ public class GooglePlacesEnricher : IPlaceEnricher
             {
                 IsError = true,
                 Confidence = EnrichmentConfidence.None,
-                Candidates = candidates,
+                Candidates = match.ViableCandidates.ToList(),
                 Message = $"Could not reach Google Places: {ex.Message}"
             };
         }
@@ -81,9 +83,35 @@ public class GooglePlacesEnricher : IPlaceEnricher
         {
             Confidence = EnrichmentConfidence.High,
             Data = data,
-            Candidates = candidates,
+            Candidates = match.ViableCandidates.ToList(),
             Message = "Enriched from Google Places."
         };
+    }
+
+    // Phase 5b: the user picked one candidate from an AmbiguousMatch response - fetch its full
+    // details directly, no searching/scoring involved. Confidence is recorded as High since the
+    // user themselves confirmed the match.
+    public async Task<EnrichmentResult> GetPlaceDetailsAsync(string placeId)
+    {
+        if (string.IsNullOrWhiteSpace(placeId))
+        {
+            return new EnrichmentResult { IsError = true, Message = "No place selected." };
+        }
+
+        try
+        {
+            var data = await GetDetailsAsync(placeId, EnrichmentConfidence.High);
+            return new EnrichmentResult { Confidence = EnrichmentConfidence.High, Data = data, Message = "Enriched from Google Places." };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or PlacesApiException or JsonException or TaskCanceledException)
+        {
+            return new EnrichmentResult
+            {
+                IsError = true,
+                Confidence = EnrichmentConfidence.None,
+                Message = $"Could not reach Google Places: {ex.Message}"
+            };
+        }
     }
 
     private async Task<List<PlaceCandidate>> SearchAsync(string textQuery)

@@ -1,147 +1,296 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:ReelVault.App"
              x:Class="ReelVault.App.DetailPage"
              Title="Item Detail">
 
-    <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="10">
+    <!-- Phase 6.5 Part B: default VIEW mode (read-only, enrichment-first, empty extracted fields
+         hidden) with an Edit toggle (top-right) that reveals the full editable form. -->
+    <ContentPage.ToolbarItems>
+        <ToolbarItem x:Name="EditToolbarItem" Text="Edit" Clicked="OnEditToggleClicked" />
+    </ContentPage.ToolbarItems>
 
-            <ActivityIndicator x:Name="LoadingIndicator" IsRunning="False" IsVisible="False" />
-            <Label x:Name="ErrorLabel" TextColor="Red" LineBreakMode="WordWrap" IsVisible="False" />
+    <ScrollView x:Name="ContentRoot">
+        <VerticalStackLayout Spacing="0">
 
-            <VerticalStackLayout x:Name="FormPanel" IsVisible="False" Spacing="10">
+            <ActivityIndicator x:Name="LoadingIndicator" IsRunning="False" IsVisible="False" Margin="20" />
+            <Label
+                x:Name="ErrorLabel"
+                TextColor="{StaticResource ClosedRed}"
+                LineBreakMode="WordWrap"
+                IsVisible="False"
+                Margin="20" />
 
-                <Label x:Name="CategoryLabel" FontAttributes="Bold" TextColor="{StaticResource Secondary}" />
+            <VerticalStackLayout x:Name="FormPanel" IsVisible="False" Spacing="0">
 
-                <Label Text="Title" FontAttributes="Bold" />
-                <Entry x:Name="TitleEntry" />
+                <!-- Hero: Google photo if enriched, else a flat category-tinted placeholder. A
+                     simple dark scrim keeps the minimal category pill legible over either. -->
+                <Grid HeightRequest="220">
+                    <Image x:Name="HeroImage" IsVisible="False" Aspect="AspectFill" />
+                    <Grid x:Name="HeroPlaceholder">
+                        <Label x:Name="HeroPlaceholderLabel" TextColor="#26FFFFFF" FontFamily="OpenSansSemibold" FontSize="76" HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Grid>
+                    <Grid Background="{StaticResource HeroScrimGradient}" InputTransparent="True" />
+                    <Border
+                        x:Name="CategoryBadgeBorder"
+                        HorizontalOptions="Start"
+                        VerticalOptions="End"
+                        Margin="20,0,0,16"
+                        BackgroundColor="#33000000"
+                        Stroke="Transparent"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="10,5">
+                        <Label x:Name="CategoryBadgeLabel" TextColor="White" FontFamily="OpenSansSemibold" FontSize="11" />
+                    </Border>
+                </Grid>
 
-                <Label Text="Status" FontAttributes="Bold" />
-                <Picker x:Name="StatusPicker" />
+                <!-- Section spacing/padding here matches DesignTuning.DetailContentPadding /
+                     DetailSectionSpacing - change those constants to keep code-built rows (the
+                     dynamic "from the reel" fields) visually consistent with this static layout. -->
+                <VerticalStackLayout Padding="24,20,24,28" Spacing="20">
 
-                <Label Text="Summary" FontAttributes="Bold" />
-                <Editor x:Name="SummaryEditor" AutoSize="TextChanges" MinimumHeightRequest="60" />
+                    <!-- ============================= VIEW MODE ============================= -->
+                    <VerticalStackLayout x:Name="ViewModePanel" Spacing="20">
 
-                <BoxView HeightRequest="1" Color="LightGray" Margin="0,8" />
+                        <VerticalStackLayout Spacing="4">
+                            <Label x:Name="TitleViewLabel" FontFamily="OpenSansSemibold" FontSize="24" HorizontalOptions="Start" LineBreakMode="WordWrap" />
+                            <Label x:Name="AreaCityLabel" Style="{StaticResource MutedLabel}" FontSize="15" />
+                        </VerticalStackLayout>
 
-                <!-- Food details: visible only when Category == "Food" -->
-                <VerticalStackLayout x:Name="FoodPanel" Spacing="10">
-                    <Label Text="Food details" FontAttributes="Bold" FontSize="16" />
+                        <Border x:Name="StatusBadgeBorder" HorizontalOptions="Start" Padding="12,6" StrokeShape="RoundRectangle 20">
+                            <Label x:Name="StatusBadgeLabel" FontFamily="OpenSansSemibold" FontSize="12" />
+                        </Border>
 
-                    <Label Text="Area" />
-                    <Entry x:Name="AreaEntry" />
+                        <!-- The star content: enriched Google Places info, given visual priority. -->
+                        <Border x:Name="EnrichmentPanel" Style="{StaticResource CardStyle}" Padding="18" IsVisible="False">
+                            <VerticalStackLayout Spacing="8">
+                                <Label x:Name="EnrichedNameLabel" Style="{StaticResource CardTitleLabel}" FontSize="18" LineBreakMode="WordWrap" />
 
-                    <Label Text="City" />
-                    <Entry x:Name="CityEntry" />
+                                <HorizontalStackLayout Spacing="10">
+                                    <Label x:Name="EnrichedRatingLabel" TextColor="{StaticResource AccentAmber}" FontFamily="OpenSansSemibold" FontSize="14" />
+                                    <Label x:Name="EnrichedPriceLabel" Style="{StaticResource MutedLabel}" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
 
-                    <Label Text="Cuisine" />
-                    <Entry x:Name="CuisineEntry" />
+                                <Label x:Name="EnrichedTypesLabel" Style="{StaticResource MutedLabel}" LineBreakMode="WordWrap" />
 
-                    <Label Text="Price range" />
-                    <Entry x:Name="PriceRangeEntry" />
+                                <Border
+                                    x:Name="OpenNowBadge"
+                                    IsVisible="False"
+                                    HorizontalOptions="Start"
+                                    Stroke="Transparent"
+                                    StrokeShape="RoundRectangle 10"
+                                    Padding="8,3"
+                                    Margin="0,2,0,0">
+                                    <Label x:Name="OpenNowLabel" FontFamily="OpenSansSemibold" FontSize="12" />
+                                </Border>
 
-                    <Label Text="Must try (comma-separated)" />
-                    <Entry x:Name="MustTryEntry" />
+                                <Label x:Name="EnrichedHoursLabel" Style="{StaticResource MutedLabel}" LineBreakMode="WordWrap" Margin="0,4,0,0" />
+                                <Label x:Name="EnrichedAddressLabel" Style="{StaticResource MutedLabel}" LineBreakMode="WordWrap" />
 
-                    <Label Text="Rating" />
-                    <Entry x:Name="RatingEntry" />
+                                <Border
+                                    x:Name="MapsLinkBorder"
+                                    IsVisible="False"
+                                    Stroke="{StaticResource Primary}"
+                                    StrokeThickness="1"
+                                    StrokeShape="RoundRectangle 10"
+                                    BackgroundColor="Transparent"
+                                    Padding="12,7"
+                                    Margin="0,6,0,0"
+                                    HorizontalOptions="Start">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnMapsLinkTapped" />
+                                    </Border.GestureRecognizers>
+                                    <Label
+                                        x:Name="EnrichedMapsLinkLabel"
+                                        Text="Open in Google Maps ↗"
+                                        TextColor="{StaticResource Primary}"
+                                        FontFamily="OpenSansSemibold"
+                                        FontSize="13" />
+                                </Border>
+                            </VerticalStackLayout>
+                        </Border>
 
-                    <Label Text="Opening hours" />
-                    <Entry x:Name="OpeningHoursEntry" />
+                        <!-- Part B: a small note clarifying where the panel above came from. -->
+                        <Label
+                            x:Name="EnrichmentNoteLabel"
+                            Style="{StaticResource MutedLabel}"
+                            FontAttributes="Italic"
+                            FontSize="12"
+                            IsVisible="False"
+                            Margin="0,-12,0,0" />
 
-                    <Label Text="Map query" />
-                    <Entry x:Name="MapQueryEntry" />
+                        <!-- Part C: only appears when this place is NOT enriched (auto-enrich on
+                             save already ran silently - this is the manual fallback for an
+                             ambiguous or failed match, not a normal always-there button). -->
+                        <Button
+                            x:Name="MatchPlaceButton"
+                            Text="Match this place"
+                            Clicked="OnMatchPlaceClicked"
+                            HorizontalOptions="Start"
+                            IsVisible="False" />
+                        <ActivityIndicator x:Name="EnrichLoadingIndicator" IsRunning="False" IsVisible="False" />
+                        <Label
+                            x:Name="EnrichMessageLabel"
+                            Style="{StaticResource MutedLabel}"
+                            FontAttributes="Italic"
+                            LineBreakMode="WordWrap"
+                            IsVisible="False" />
 
-                    <Label Text="Veg options" />
-                    <Entry x:Name="VegOptionsEntry" />
+                        <!-- Disambiguation picker (Phase 5b): shown only when Match this place
+                             finds 2+ viable candidates. Nothing is stored until the user taps one,
+                             or dismisses with "None of these". -->
+                        <VerticalStackLayout x:Name="CandidatePickerPanel" Spacing="10" IsVisible="False">
+                            <Label Text="We found a few places — which one?" Style="{StaticResource SectionHeaderLabel}" FontSize="16" />
 
-                    <Label Text="Parking" />
-                    <Entry x:Name="ParkingEntry" />
+                            <CollectionView x:Name="CandidatesCollectionView" SelectionMode="Single" SelectionChanged="OnCandidateSelected">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="local:PlaceCandidateDisplay">
+                                        <Border Style="{StaticResource CardStyle}" Padding="12" Margin="0,4">
+                                            <VerticalStackLayout Spacing="2">
+                                                <Label Text="{Binding DisplayName}" Style="{StaticResource CardTitleLabel}" LineBreakMode="WordWrap" />
+                                                <Label Text="{Binding Address}" Style="{StaticResource MutedLabel}" LineBreakMode="WordWrap" />
+                                                <Label Text="{Binding RatingText}" FontSize="13" TextColor="{StaticResource AccentAmber}" />
+                                            </VerticalStackLayout>
+                                        </Border>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+
+                            <ActivityIndicator x:Name="CandidateSelectLoadingIndicator" IsRunning="False" IsVisible="False" />
+
+                            <Button
+                                x:Name="NoneOfTheseButton"
+                                Text="None of these"
+                                Clicked="OnNoneOfTheseClicked"
+                                HorizontalOptions="Fill"
+                                BackgroundColor="{StaticResource Gray600}"
+                                TextColor="{StaticResource White}" />
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Your notes" Style="{StaticResource SectionHeaderLabel}" FontSize="15" />
+                            <Label x:Name="UserNotesViewLabel" LineBreakMode="WordWrap" />
+                        </VerticalStackLayout>
+
+                        <!-- "From the reel": ONLY fields that actually have a value get a row here
+                             (built in code - see DetailPage.xaml.cs BuildExtractedFieldsView). The
+                             whole card is hidden if nothing extracted has a value, so this never
+                             shows as a wall of empty boxes. -->
+                        <Border x:Name="ExtractedFieldsPanel" Style="{StaticResource CardStyle}" Padding="16" IsVisible="False">
+                            <VerticalStackLayout Spacing="10">
+                                <Label Text="From the reel" Style="{StaticResource MutedLabel}" FontFamily="OpenSansSemibold" FontSize="13" />
+                                <VerticalStackLayout x:Name="ExtractedFieldsContainer" Spacing="8" />
+                            </VerticalStackLayout>
+                        </Border>
+
+                    </VerticalStackLayout>
+
+                    <!-- ============================= EDIT MODE ============================= -->
+                    <VerticalStackLayout x:Name="EditModePanel" Spacing="16" IsVisible="False">
+
+                        <Entry x:Name="TitleEntry" FontFamily="OpenSansSemibold" FontSize="20" />
+
+                        <Border Style="{StaticResource CardStyle}" Padding="14">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="Status" Style="{StaticResource MutedLabel}" />
+                                <Picker x:Name="StatusPicker" />
+                            </VerticalStackLayout>
+                        </Border>
+
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Summary" Style="{StaticResource SectionHeaderLabel}" FontSize="15" />
+                            <Editor x:Name="SummaryEditor" AutoSize="TextChanges" MinimumHeightRequest="60" />
+                        </VerticalStackLayout>
+
+                        <!-- Food details: visible only when Category == "Food". -->
+                        <Border x:Name="FoodPanel" Style="{StaticResource CardStyle}" Padding="16">
+                            <VerticalStackLayout Spacing="10">
+                                <Label Text="From the reel" Style="{StaticResource SectionHeaderLabel}" FontSize="15" />
+
+                                <Label Text="Area" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="AreaEntry" />
+
+                                <Label Text="City" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="CityEntry" />
+
+                                <Label Text="Cuisine" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="CuisineEntry" />
+
+                                <Label Text="Price range" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="PriceRangeEntry" />
+
+                                <Label Text="Must try (comma-separated)" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="MustTryEntry" />
+
+                                <Label Text="Rating" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="RatingEntry" />
+
+                                <Label Text="Opening hours" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="OpeningHoursEntry" />
+
+                                <Label Text="Map query" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="MapQueryEntry" />
+
+                                <Label Text="Veg options" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="VegOptionsEntry" />
+
+                                <Label Text="Parking" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="ParkingEntry" />
+                            </VerticalStackLayout>
+                        </Border>
+
+                        <!-- Travel details: visible only when Category == "Travel". -->
+                        <Border x:Name="TravelPanel" Style="{StaticResource CardStyle}" Padding="16">
+                            <VerticalStackLayout Spacing="10">
+                                <Label Text="From the reel" Style="{StaticResource SectionHeaderLabel}" FontSize="15" />
+
+                                <Label Text="Area" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="TravelAreaEntry" />
+
+                                <Label Text="City" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="TravelCityEntry" />
+
+                                <Label Text="Place type" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="PlaceTypeEntry" />
+
+                                <Label Text="Best time to visit" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="BestTimeToVisitEntry" />
+
+                                <Label Text="Estimated cost" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="EstimatedCostEntry" />
+
+                                <Label Text="Highlights (comma-separated)" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="HighlightsEntry" />
+
+                                <Label Text="Activities (comma-separated)" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="ActivitiesEntry" />
+
+                                <Label Text="Map query" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="TravelMapQueryEntry" />
+
+                                <Label Text="Nearby places (comma-separated)" Style="{StaticResource MutedLabel}" />
+                                <Entry x:Name="NearbyPlacesEntry" />
+                            </VerticalStackLayout>
+                        </Border>
+
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="Your notes" Style="{StaticResource SectionHeaderLabel}" FontSize="15" />
+                            <Editor x:Name="UserNotesEditor" AutoSize="TextChanges" MinimumHeightRequest="80" />
+                        </VerticalStackLayout>
+
+                        <Button x:Name="SaveButton" Text="Save changes" Clicked="OnSaveClicked" HorizontalOptions="Fill" Margin="0,4,0,0" />
+                        <Button
+                            x:Name="ArchiveButton"
+                            Text="Archive (remove from list)"
+                            Clicked="OnArchiveClicked"
+                            HorizontalOptions="Fill"
+                            BackgroundColor="Transparent"
+                            TextColor="{StaticResource ClosedRed}" />
+
+                    </VerticalStackLayout>
+
                 </VerticalStackLayout>
-
-                <!-- Travel details: visible only when Category == "Travel" -->
-                <VerticalStackLayout x:Name="TravelPanel" Spacing="10">
-                    <Label Text="Travel details" FontAttributes="Bold" FontSize="16" />
-
-                    <Label Text="Area" />
-                    <Entry x:Name="TravelAreaEntry" />
-
-                    <Label Text="City" />
-                    <Entry x:Name="TravelCityEntry" />
-
-                    <Label Text="Place type" />
-                    <Entry x:Name="PlaceTypeEntry" />
-
-                    <Label Text="Best time to visit" />
-                    <Entry x:Name="BestTimeToVisitEntry" />
-
-                    <Label Text="Estimated cost" />
-                    <Entry x:Name="EstimatedCostEntry" />
-
-                    <Label Text="Highlights (comma-separated)" />
-                    <Entry x:Name="HighlightsEntry" />
-
-                    <Label Text="Activities (comma-separated)" />
-                    <Entry x:Name="ActivitiesEntry" />
-
-                    <Label Text="Map query" />
-                    <Entry x:Name="TravelMapQueryEntry" />
-
-                    <Label Text="Nearby places (comma-separated)" />
-                    <Entry x:Name="NearbyPlacesEntry" />
-                </VerticalStackLayout>
-
-                <BoxView HeightRequest="1" Color="LightGray" Margin="0,8" />
-
-                <Button x:Name="EnrichButton" Text="Enrich with Google" Clicked="OnEnrichClicked" HorizontalOptions="Fill" />
-                <ActivityIndicator x:Name="EnrichLoadingIndicator" IsRunning="False" IsVisible="False" />
-
-                <Label
-                    x:Name="EnrichMessageLabel"
-                    TextColor="Gray"
-                    FontAttributes="Italic"
-                    LineBreakMode="WordWrap"
-                    IsVisible="False" />
-
-                <!-- Enriched fields from Google Places - visually distinct from the reel-extracted
-                     fields above, and never merged into them (see DetailPage.xaml.cs PopulateEnrichment). -->
-                <VerticalStackLayout
-                    x:Name="EnrichmentPanel"
-                    Spacing="6"
-                    IsVisible="False"
-                    BackgroundColor="{AppThemeBinding Light=#EEF3FF, Dark=#1C2440}"
-                    Padding="12">
-
-                    <Label Text="From Google" FontAttributes="Bold" FontSize="16" TextColor="{StaticResource Secondary}" />
-
-                    <Label x:Name="EnrichedNameLabel" FontAttributes="Bold" LineBreakMode="WordWrap" />
-                    <Label x:Name="EnrichedAddressLabel" LineBreakMode="WordWrap" />
-                    <Label x:Name="EnrichedRatingLabel" />
-                    <Label x:Name="EnrichedPriceLabel" />
-                    <Label x:Name="EnrichedTypesLabel" LineBreakMode="WordWrap" />
-                    <Label x:Name="EnrichedHoursLabel" LineBreakMode="WordWrap" />
-
-                    <Label
-                        x:Name="EnrichedMapsLinkLabel"
-                        Text="Open in Google Maps"
-                        TextColor="DodgerBlue"
-                        TextDecorations="Underline"
-                        IsVisible="False">
-                        <Label.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnMapsLinkTapped" />
-                        </Label.GestureRecognizers>
-                    </Label>
-                </VerticalStackLayout>
-
-                <BoxView HeightRequest="1" Color="LightGray" Margin="0,8" />
-
-                <Label Text="Your notes" FontAttributes="Bold" />
-                <Editor x:Name="UserNotesEditor" AutoSize="TextChanges" MinimumHeightRequest="80" />
-
-                <Button x:Name="SaveButton" Text="Save changes" Clicked="OnSaveClicked" HorizontalOptions="Fill" Margin="0,10,0,0" />
-                <Button x:Name="ArchiveButton" Text="Archive (remove from list)" Clicked="OnArchiveClicked" HorizontalOptions="Fill" BackgroundColor="IndianRed" TextColor="White" />
-
             </VerticalStackLayout>
 
         </VerticalStackLayout>

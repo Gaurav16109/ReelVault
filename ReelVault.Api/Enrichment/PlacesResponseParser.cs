@@ -27,6 +27,7 @@ public static class PlacesResponseParser
                 Name = GetDisplayName(place),
                 Address = GetString(place, "formattedAddress"),
                 Rating = GetDouble(place, "rating"),
+                UserRatingCount = GetInt(place, "userRatingCount"),
                 Latitude = GetLocation(place, "latitude"),
                 Longitude = GetLocation(place, "longitude")
             });
@@ -54,8 +55,71 @@ public static class PlacesResponseParser
             Longitude = GetLocation(place, "longitude"),
             GoogleMapsUri = GetString(place, "googleMapsUri"),
             Confidence = confidence,
-            EnrichedAt = enrichedAt
+            EnrichedAt = enrichedAt,
+            PhotoReference = GetFirstPhotoReference(place),
+            OpeningPeriods = GetOpeningPeriods(place)
         };
+    }
+
+    private static string? GetFirstPhotoReference(JsonElement place)
+    {
+        if (!place.TryGetProperty("photos", out var photos) || photos.ValueKind != JsonValueKind.Array || photos.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        return GetString(photos[0], "name");
+    }
+
+    private static List<OpeningPeriod>? GetOpeningPeriods(JsonElement place)
+    {
+        if (!place.TryGetProperty("regularOpeningHours", out var hours) || hours.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!hours.TryGetProperty("periods", out var periods) || periods.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var result = new List<OpeningPeriod>();
+        foreach (var period in periods.EnumerateArray())
+        {
+            var open = ParseTimePoint(period, "open");
+            var close = ParseTimePoint(period, "close");
+            if (open is null || close is null)
+            {
+                continue;
+            }
+
+            result.Add(new OpeningPeriod
+            {
+                OpenDay = (DayOfWeek)open.Value.Day,
+                OpenTime = new TimeOnly(open.Value.Hour, open.Value.Minute),
+                CloseDay = (DayOfWeek)close.Value.Day,
+                CloseTime = new TimeOnly(close.Value.Hour, close.Value.Minute)
+            });
+        }
+
+        return result.Count > 0 ? result : null;
+    }
+
+    private static (int Day, int Hour, int Minute)? ParseTimePoint(JsonElement period, string property)
+    {
+        if (!period.TryGetProperty(property, out var point) || point.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var day = GetInt(point, "day");
+        var hour = GetInt(point, "hour");
+        if (day is null || hour is null)
+        {
+            return null;
+        }
+
+        return (day.Value, hour.Value, GetInt(point, "minute") ?? 0);
     }
 
     private static string? GetDisplayName(JsonElement place) =>

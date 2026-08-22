@@ -224,23 +224,105 @@ public class ItemsController(
             entity.EnrichmentData = EnrichmentDataSerializer.Serialize(result.Data);
             entity.EnrichmentStatus = EnrichmentStatus.Enriched;
             entity.EnrichedAt = result.Data.EnrichedAt;
-        }
-        else
-        {
-            entity.EnrichmentStatus = EnrichmentStatus.NoConfidentMatch;
-            entity.EnrichedAt = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            return new EnrichItemResponse
+            {
+                Item = ToDetailDto(entity),
+                Enriched = true,
+                Status = EnrichmentStatus.Enriched,
+                Confidence = result.Confidence,
+                Message = result.Message,
+                Candidates = result.Candidates
+            };
         }
 
+        if (result.Candidates.Count >= 2)
+        {
+            // Genuinely ambiguous (2+ viable candidates) - nothing is stored until the user picks
+            // via POST /enrich/select, or dismisses with "None of these" (stores nothing at all).
+            // The item is returned completely unchanged.
+            return new EnrichItemResponse
+            {
+                Item = ToDetailDto(entity),
+                Enriched = false,
+                Status = EnrichmentStatus.AmbiguousMatch,
+                Confidence = result.Confidence,
+                Message = result.Message,
+                Candidates = result.Candidates
+            };
+        }
+
+        // 0-1 viable candidates: nothing to pick between, so record "couldn't confidently match"
+        // exactly as Phase 5a did.
+        entity.EnrichmentStatus = EnrichmentStatus.NoConfidentMatch;
+        entity.EnrichedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         return new EnrichItemResponse
         {
             Item = ToDetailDto(entity),
-            Enriched = entity.EnrichmentStatus == EnrichmentStatus.Enriched,
+            Enriched = false,
+            Status = EnrichmentStatus.NoConfidentMatch,
             Confidence = result.Confidence,
             Message = result.Message,
             Candidates = result.Candidates
+        };
+    }
+
+    // Finalizes the user's pick from an AmbiguousMatch candidate list. Fetches full Place Details
+    // for exactly that placeId (no re-searching/scoring) and stores it as the item's enrichment.
+    // A failure here (bad placeId, Places error) never touches the item - only a Problem is returned.
+    [HttpPost("{id:guid}/enrich/select")]
+    public async Task<ActionResult<EnrichItemResponse>> SelectEnrichmentCandidate(Guid id, [FromBody] SelectEnrichmentCandidateRequest request)
+    {
+        var entity = await db.SavedItems.FindAsync(id);
+        if (entity is null)
+        {
+            return Problem(title: "Item not found.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PlaceId))
+        {
+            return Problem(title: "No place selected.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        EnrichmentResult result;
+        try
+        {
+            result = await placeEnricher.GetPlaceDetailsAsync(request.PlaceId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Enrichment select threw unexpectedly for item {ItemId}; item left unchanged.", id);
+            return Problem(
+                title: "Enrichment failed.",
+                detail: "Could not reach Google Places right now. Try again later.",
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        if (result.IsError || result.Data is null)
+        {
+            logger.LogWarning("Places select error for item {ItemId}: {Message}", id, result.Message);
+            return Problem(title: "Enrichment failed.", detail: result.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        entity.EnrichmentData = EnrichmentDataSerializer.Serialize(result.Data);
+        entity.EnrichmentStatus = EnrichmentStatus.Enriched;
+        entity.EnrichedAt = result.Data.EnrichedAt;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return new EnrichItemResponse
+        {
+            Item = ToDetailDto(entity),
+            Enriched = true,
+            Status = EnrichmentStatus.Enriched,
+            Confidence = EnrichmentConfidence.High,
+            Message = result.Message,
+            Candidates = []
         };
     }
 
@@ -285,18 +367,26 @@ public class ItemsController(
         return rows.Select(ToListDto).ToList();
     }
 
-    private static SavedItemListDto ToListDto(SavedItem entity) => new()
+    private static SavedItemListDto ToListDto(SavedItem entity)
     {
-        Id = entity.Id,
-        Category = entity.Category,
-        Title = entity.Title,
-        Summary = entity.Summary,
-        ThumbnailUrl = entity.ThumbnailUrl,
-        Status = entity.Status,
-        Area = entity.Area,
-        City = entity.City,
-        SavedAt = entity.SavedAt
-    };
+        var enrichment = EnrichmentDataSerializer.Deserialize(entity.EnrichmentData);
+
+        return new SavedItemListDto
+        {
+            Id = entity.Id,
+            Category = entity.Category,
+            Title = entity.Title,
+            Summary = entity.Summary,
+            ThumbnailUrl = entity.ThumbnailUrl,
+            Status = entity.Status,
+            Area = entity.Area,
+            City = entity.City,
+            SavedAt = entity.SavedAt,
+            EnrichmentStatus = entity.EnrichmentStatus,
+            Rating = enrichment?.Rating,
+            PhotoReference = enrichment?.PhotoReference
+        };
+    }
 
     private static SavedItemDetailDto ToDetailDto(SavedItem entity) => new()
     {

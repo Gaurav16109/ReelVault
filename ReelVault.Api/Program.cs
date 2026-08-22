@@ -37,6 +37,12 @@ builder.Services.AddHttpClient<IPlaceEnricher, GooglePlacesEnricher>(client =>
     client.BaseAddress = new Uri("https://places.googleapis.com/");
 });
 
+// Proxies Places photo bytes (GET /api/places/photo) so the API key never reaches the MAUI client.
+builder.Services.AddHttpClient<IPlacePhotoFetcher, GooglePlacePhotoFetcher>(client =>
+{
+    client.BaseAddress = new Uri("https://places.googleapis.com/");
+});
+
 // Permissive for Phase 0 local development only; the MAUI app calls the API from a different origin/port.
 const string CorsPolicy = "AllowMauiApp";
 builder.Services.AddCors(options =>

@@ -4,15 +4,16 @@
              xmlns:local="clr-namespace:ReelVault.App"
              x:Class="ReelVault.App.ListPage"
              x:DataType="local:ListPage"
-             Title="Saved Items">
+             Title="Browse">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Padding="20" RowSpacing="8">
+    <Grid>
+    <Grid x:Name="ContentRoot" RowDefinitions="Auto,Auto,Auto,Auto,*" Padding="18,14" RowSpacing="10">
 
         <Label
             Grid.Row="0"
             x:Name="SubtitleLabel"
             Text="Saved items, newest first."
-            Style="{StaticResource SubHeadline}" />
+            Style="{StaticResource MutedLabel}" />
 
         <SearchBar
             Grid.Row="1"
@@ -26,73 +27,161 @@
             <Picker Grid.Column="1" x:Name="AreaPicker" Title="Area" SelectedIndexChanged="OnLocationFilterChanged" />
         </Grid>
 
-        <ActivityIndicator
-            Grid.Row="3"
-            x:Name="LoadingIndicator"
-            IsRunning="False"
-            IsVisible="False" />
-
         <Label
             Grid.Row="3"
+            Text="Saved from Reels"
+            Style="{StaticResource SectionHeaderLabel}"
+            Margin="2,8,0,0" />
+
+        <!-- Skeleton loading state (B5): a couple of static placeholder card shapes instead of a
+             bare spinner - "loading" reads as intentional/designed rather than a blank stall. No
+             shimmer/animation on these - kept static on purpose (cheap, no continuous motion). -->
+        <Grid
+            Grid.Row="4"
+            x:Name="SkeletonPanel"
+            IsVisible="False"
+            VerticalOptions="Start"
+            ColumnDefinitions="*,*"
+            ColumnSpacing="12"
+            RowDefinitions="222,222"
+            RowSpacing="12">
+            <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardStyle}" Opacity="0.55" />
+            <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardStyle}" Opacity="0.55" />
+            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardStyle}" Opacity="0.55" />
+            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardStyle}" Opacity="0.55" />
+        </Grid>
+
+        <Label
+            Grid.Row="4"
             x:Name="ErrorLabel"
-            TextColor="Red"
+            TextColor="{StaticResource ClosedRed}"
             LineBreakMode="WordWrap"
-            IsVisible="False" />
+            IsVisible="False"
+            VerticalOptions="Start"
+            Margin="0,30" />
 
-        <Label
-            Grid.Row="3"
-            x:Name="EmptyLabel"
-            Text="Nothing found. Extract a caption and tap Save."
-            IsVisible="False" />
+        <!-- Warm empty state - never a blank screen. -->
+        <VerticalStackLayout
+            Grid.Row="4"
+            x:Name="EmptyStatePanel"
+            IsVisible="False"
+            VerticalOptions="Start"
+            Spacing="6"
+            Margin="0,36,0,0">
+            <Label Text="🍽️" FontSize="42" HorizontalOptions="Center" />
+            <Label Text="Nothing saved yet" Style="{StaticResource SectionHeaderLabel}" HorizontalOptions="Center" HorizontalTextAlignment="Center" />
+            <Label Text="Share a reel to get started, or tap Extract New above." Style="{StaticResource EmptyStateLabel}" Margin="30,0" />
+        </VerticalStackLayout>
 
         <CollectionView
             Grid.Row="4"
             x:Name="ItemsCollectionView"
-            SelectionMode="Single"
-            SelectionChanged="OnItemSelected">
+            SelectionMode="None">
+            <CollectionView.ItemsLayout>
+                <GridItemsLayout Orientation="Vertical" Span="2" HorizontalItemSpacing="12" VerticalItemSpacing="12" />
+            </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="local:SavedItemRow">
-                    <Grid Padding="0,10" ColumnDefinitions="56,*" ColumnSpacing="12">
+                <DataTemplate x:DataType="local:SavedItemCard">
+                    <Border Style="{StaticResource CardStyle}" Padding="0" HeightRequest="222" Loaded="OnCardLoaded">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnCardTapped" />
+                        </Border.GestureRecognizers>
+                        <Grid RowDefinitions="120,*" RowSpacing="0">
 
-                        <!-- Real thumbnail -->
-                        <Image
-                            Grid.Column="0"
-                            Source="{Binding ThumbnailUrl}"
-                            IsVisible="{Binding HasThumbnail}"
-                            Aspect="AspectFill"
-                            HeightRequest="56"
-                            WidthRequest="56" />
+                            <!-- Photo: Google Places (if enriched) or the Instagram thumbnail fallback. -->
+                            <Image
+                                Grid.Row="0"
+                                Source="{Binding PhotoUrl}"
+                                IsVisible="{Binding HasPhoto}"
+                                Aspect="AspectFill"
+                                HeightRequest="120" />
 
-                        <!-- Placeholder: first-letter tile, shown when there's no thumbnail -->
-                        <Border
-                            Grid.Column="0"
-                            IsVisible="{Binding HasThumbnail, Converter={StaticResource InvertedBoolConverter}}"
-                            HeightRequest="56"
-                            WidthRequest="56"
-                            StrokeShape="RoundRectangle 8"
-                            BackgroundColor="{StaticResource Primary}">
-                            <Label
-                                Text="{Binding PlaceholderLetter}"
-                                TextColor="White"
-                                FontSize="24"
-                                HorizontalOptions="Center"
-                                VerticalOptions="Center" />
-                        </Border>
+                            <!-- Placeholder: category-tinted gradient tile with the place's initial -
+                                 designed to look intentional, not like a missing image. -->
+                            <Grid
+                                Grid.Row="0"
+                                IsVisible="{Binding HasPhoto, Converter={StaticResource InvertedBoolConverter}}"
+                                Background="{Binding PlaceholderGradient}"
+                                HeightRequest="120">
+                                <Label
+                                    Text="{Binding PlaceholderLetter}"
+                                    TextColor="#33FFFFFF"
+                                    FontFamily="OpenSansSemibold"
+                                    FontSize="54"
+                                    HorizontalOptions="Center"
+                                    VerticalOptions="Center" />
+                            </Grid>
 
-                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                            <Label Text="{Binding Title}" FontAttributes="Bold" />
-                            <Label Text="{Binding AreaCity}" FontSize="13" TextColor="Gray" />
-                            <HorizontalStackLayout Spacing="8">
-                                <Label Text="{Binding Category}" FontSize="12" FontAttributes="Bold" TextColor="{StaticResource Secondary}" />
-                                <Label Text="{Binding StatusText}" FontSize="12" TextColor="{StaticResource Primary}" />
-                            </HorizontalStackLayout>
-                        </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="1" Padding="10,8" Spacing="4">
+                                <Label Text="{Binding Title}" Style="{StaticResource CardTitleLabel}" MaxLines="1" />
+                                <Label Text="{Binding AreaCity}" Style="{StaticResource MutedLabel}" MaxLines="1" IsVisible="{Binding HasAreaCity}" />
 
-                    </Grid>
+                                <HorizontalStackLayout Spacing="6" Margin="0,4,0,0">
+                                    <Label
+                                        Text="{Binding RatingText}"
+                                        FontFamily="OpenSansSemibold"
+                                        FontSize="12"
+                                        TextColor="{StaticResource AccentAmber}"
+                                        IsVisible="{Binding HasRating}"
+                                        VerticalOptions="Center" />
+                                    <Border
+                                        BackgroundColor="{Binding PlaceholderColor}"
+                                        Stroke="Transparent"
+                                        StrokeShape="RoundRectangle 8"
+                                        Padding="7,2">
+                                        <Label Text="{Binding Category}" TextColor="White" FontFamily="OpenSansSemibold" FontSize="11" />
+                                    </Border>
+                                    <Label Text="{Binding StatusText}" Style="{StaticResource MutedLabel}" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+
+                            <!-- Tactile press feedback (B2): brief white glow flash + scale punch,
+                                 driven from code-behind - see OnCardTapped. -->
+                            <BoxView Grid.RowSpan="2" x:Name="PressGlow" Color="White" Opacity="0" InputTransparent="True" />
+                        </Grid>
+                    </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
 
+        <!-- Live in-vault search suggestions (B4): filters the ALREADY-loaded saved items
+             client-side as the user types (title/area/city) - no external autocomplete, no new
+             endpoint. Tapping a suggestion opens that place directly. -->
+        <Border
+            Grid.Row="1"
+            Grid.RowSpan="3"
+            x:Name="SuggestionsPanel"
+            IsVisible="False"
+            VerticalOptions="Start"
+            Margin="0,50,0,0"
+            Style="{StaticResource CardStyle}"
+            Padding="4"
+            ZIndex="10">
+            <CollectionView x:Name="SuggestionsCollectionView" SelectionMode="Single" SelectionChanged="OnSuggestionSelected" HeightRequest="230">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="local:SavedItemCard">
+                        <Grid Padding="12,10" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Border
+                                Grid.Column="0"
+                                BackgroundColor="{Binding PlaceholderColor}"
+                                Stroke="Transparent"
+                                StrokeShape="RoundRectangle 8"
+                                HeightRequest="34"
+                                WidthRequest="34"
+                                Padding="0">
+                                <Label Text="{Binding PlaceholderLetter}" TextColor="White" FontFamily="OpenSansSemibold" FontSize="14" HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Border>
+                            <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                <Label Text="{Binding Title}" Style="{StaticResource CardTitleLabel}" FontSize="14" MaxLines="1" />
+                                <Label Text="{Binding AreaCity}" Style="{StaticResource MutedLabel}" MaxLines="1" IsVisible="{Binding HasAreaCity}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Border>
+
+    </Grid>
     </Grid>
 
 </ContentPage>

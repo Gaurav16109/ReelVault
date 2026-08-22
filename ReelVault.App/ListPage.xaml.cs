@@ -6,17 +6,40 @@ public partial class ListPage : ContentPage
 {
     private const string AnyOption = "(Any)";
 
+    // B4: how many live suggestions to show at most - kept small so the dropdown stays a quick
+    // glance, not a second list.
+    private const int MaxSuggestions = 6;
+
     private readonly IReelVaultApiClient _apiClient;
+    private readonly IApiSettingsService _apiSettings;
     private readonly IServiceProvider _services;
     private string? _category;
     private bool _suppressLocationFilterEvents;
+    private int _cardEntranceCounter;
 
-    public ListPage(IReelVaultApiClient apiClient, IServiceProvider services)
+    // B4: the full (text-unfiltered) category+location-scoped set, used purely to answer live
+    // suggestion queries client-side - populated from the exact same GetItemsAsync call the grid
+    // itself already makes (only ever when q is empty), so suggestions never depend on anything
+    // beyond the existing saved-items endpoint / already-loaded data.
+    private List<SavedItemCard> _suggestionPool = [];
+
+    public ListPage(IReelVaultApiClient apiClient, IApiSettingsService apiSettings, IServiceProvider services)
     {
         InitializeComponent();
         _apiClient = apiClient;
+        _apiSettings = apiSettings;
         _services = services;
+
+        // A1 fix: stay subscribed even while covered by a pushed DetailPage (not just while this
+        // page is the one currently on screen), so an enrichment/save/archive elsewhere refreshes
+        // this list's cards proactively instead of only on the next OnAppearing. Unsubscribes on
+        // Unloaded (true teardown when popped), not OnDisappearing (which also fires while merely
+        // covered by a pushed page - unsubscribing there would defeat the whole point).
+        ItemChangeNotifier.ItemsChanged += OnItemsChangedElsewhere;
+        Unloaded += (_, _) => ItemChangeNotifier.ItemsChanged -= OnItemsChangedElsewhere;
     }
+
+    private async void OnItemsChangedElsewhere() => await LoadItemsAsync();
 
     // Called by the caller right after resolving this page from DI, before pushing it.
     // Pass null for the unfiltered "All" view.
@@ -31,6 +54,7 @@ public partial class ListPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        _ = PageTransition.AnimateInAsync(ContentRoot);
         await LoadLocationsAsync();
         await LoadItemsAsync();
     }
@@ -57,10 +81,11 @@ public partial class ListPage : ContentPage
 
     private async Task LoadItemsAsync()
     {
-        LoadingIndicator.IsRunning = true;
-        LoadingIndicator.IsVisible = true;
+        SkeletonPanel.IsVisible = true;
+        ItemsCollectionView.IsVisible = false;
         ErrorLabel.IsVisible = false;
-        EmptyLabel.IsVisible = false;
+        EmptyStatePanel.IsVisible = false;
+        _cardEntranceCounter = 0;
 
         try
         {
@@ -69,10 +94,18 @@ public partial class ListPage : ContentPage
             var q = SearchBarControl.Text;
 
             var items = await _apiClient.GetItemsAsync(q: q, category: _category, city: city, area: area);
-            var rows = items.Select(SavedItemRow.FromDto).ToList();
+            var baseUrl = _apiSettings.BaseUrl;
+            var cards = items.Select(item => SavedItemCard.FromDto(item, baseUrl)).ToList();
 
-            ItemsCollectionView.ItemsSource = rows;
-            EmptyLabel.IsVisible = rows.Count == 0;
+            // Only refresh the suggestion pool from an unfiltered ("browse everything in this
+            // scope") load - a narrowed text search shouldn't shrink what suggestions can find.
+            if (string.IsNullOrWhiteSpace(q))
+            {
+                _suggestionPool = cards;
+            }
+
+            ItemsCollectionView.ItemsSource = cards;
+            EmptyStatePanel.IsVisible = cards.Count == 0;
         }
         catch (Exception ex)
         {
@@ -81,15 +114,19 @@ public partial class ListPage : ContentPage
         }
         finally
         {
-            LoadingIndicator.IsRunning = false;
-            LoadingIndicator.IsVisible = false;
+            SkeletonPanel.IsVisible = false;
+            ItemsCollectionView.IsVisible = true;
         }
     }
 
     private static string? SelectedOrNull(Picker picker) =>
         picker.SelectedItem as string is { } value && value != AnyOption ? value : null;
 
-    private async void OnSearchPressed(object sender, EventArgs e) => await LoadItemsAsync();
+    private async void OnSearchPressed(object sender, EventArgs e)
+    {
+        HideSuggestions();
+        await LoadItemsAsync();
+    }
 
     private async void OnSearchTextChanged(object sender, TextChangedEventArgs e)
     {
@@ -97,8 +134,68 @@ public partial class ListPage : ContentPage
         // firing a network call on every keystroke - explicit searches use the search button.
         if (string.IsNullOrEmpty(e.NewTextValue))
         {
+            HideSuggestions();
             await LoadItemsAsync();
+            return;
         }
+
+        // B4: live in-vault suggestions - purely client-side filtering of the already-loaded
+        // saved items, so this is instant and never hits the network per keystroke.
+        ShowSuggestionsFor(e.NewTextValue);
+    }
+
+    private void ShowSuggestionsFor(string query)
+    {
+        var trimmed = query.Trim();
+        if (trimmed.Length == 0)
+        {
+            HideSuggestions();
+            return;
+        }
+
+        var matches = _suggestionPool
+            .Where(card => Matches(card, trimmed))
+            .Take(MaxSuggestions)
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            HideSuggestions();
+            return;
+        }
+
+        SuggestionsCollectionView.ItemsSource = matches;
+        SuggestionsPanel.IsVisible = true;
+    }
+
+    private static bool Matches(SavedItemCard card, string query) =>
+        Contains(card.Title, query) || Contains(card.AreaCity, query);
+
+    private static bool Contains(string? value, string query) =>
+        !string.IsNullOrEmpty(value) && value.Contains(query, StringComparison.OrdinalIgnoreCase);
+
+    private void HideSuggestions()
+    {
+        SuggestionsPanel.IsVisible = false;
+        SuggestionsCollectionView.ItemsSource = null;
+    }
+
+    // Tapping a suggestion goes straight to that place's detail, rather than just narrowing the
+    // grid - the user already told us exactly which saved item they meant.
+    private async void OnSuggestionSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is not SavedItemCard card)
+        {
+            return;
+        }
+
+        SuggestionsCollectionView.SelectedItem = null;
+        HideSuggestions();
+        SearchBarControl.Text = string.Empty;
+
+        var detailPage = _services.GetRequiredService<DetailPage>();
+        await detailPage.InitializeAsync(card.Id);
+        await Navigation.PushAsync(detailPage);
     }
 
     private async void OnLocationFilterChanged(object sender, EventArgs e)
@@ -111,17 +208,31 @@ public partial class ListPage : ContentPage
         await LoadItemsAsync();
     }
 
-    private async void OnItemSelected(object sender, SelectionChangedEventArgs e)
+    // B3: gentle fade + slide-up as each card first becomes part of the visual tree (including
+    // cards that scroll into view later, as CollectionView virtualizes) - a light per-cell cascade.
+    private void OnCardLoaded(object sender, EventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not SavedItemRow row)
+        if (sender is VisualElement element)
+        {
+            EntranceAnimation.PlayOnLoad(element, _cardEntranceCounter++);
+        }
+    }
+
+    // B2: tap-triggered press punch (scale + glow), then the same navigation OnItemSelected used
+    // to do via CollectionView selection - moved to a per-item TapGestureRecognizer so the card
+    // itself can be animated directly (SelectionChanged only hands back the data item, not the
+    // rendered cell).
+    private async void OnCardTapped(object sender, TappedEventArgs e)
+    {
+        if (sender is not VisualElement { BindingContext: SavedItemCard card } cardElement)
         {
             return;
         }
 
-        ItemsCollectionView.SelectedItem = null;
+        await PressFeedback.PunchAsync(cardElement, cardElement.FindByName("PressGlow") as BoxView);
 
         var detailPage = _services.GetRequiredService<DetailPage>();
-        await detailPage.InitializeAsync(row.Id);
+        await detailPage.InitializeAsync(card.Id);
         await Navigation.PushAsync(detailPage);
     }
 }

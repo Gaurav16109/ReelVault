@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:ReelVault.App"
              x:Class="ReelVault.App.SettingsPage"
              Title="Settings">
 
-    <ScrollView>
-        <VerticalStackLayout Padding="30,20" Spacing="16">
+    <Grid>
+    <ScrollView x:Name="ContentRoot">
+        <VerticalStackLayout Padding="24,24,24,32" Spacing="14">
 
             <Label
-                Text="API Connection"
+                Text="Settings ⚙️"
                 Style="{StaticResource Headline}"
                 SemanticProperties.HeadingLevel="Level1" />
 
@@ -16,27 +18,32 @@
                 Text="The address ReelVault uses to reach the API. Change this if your Mac's network address changes - no rebuild needed, just Save."
                 Style="{StaticResource SubHeadline}" />
 
-            <Label Text="Currently active" FontAttributes="Bold" />
-            <Label x:Name="CurrentBaseUrlLabel" LineBreakMode="WordWrap" />
+            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,10,0,0">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Currently active" Style="{StaticResource MutedLabel}" />
+                    <Label x:Name="CurrentBaseUrlLabel" Style="{StaticResource CardTitleLabel}" FontSize="15" LineBreakMode="WordWrap" />
 
-            <Label Text="API base URL" FontAttributes="Bold" Margin="0,12,0,0" />
-            <Entry x:Name="BaseUrlEntry" Placeholder="http://192.168.x.x:5235" Keyboard="Url" />
+                    <Label Text="API base URL" Style="{StaticResource MutedLabel}" Margin="0,8,0,0" />
+                    <Entry x:Name="BaseUrlEntry" Placeholder="http://192.168.x.x:5235" Keyboard="Url" />
 
-            <Label
-                x:Name="ErrorLabel"
-                TextColor="Red"
-                LineBreakMode="WordWrap"
-                IsVisible="False" />
+                    <Label
+                        x:Name="ErrorLabel"
+                        TextColor="{StaticResource ClosedRed}"
+                        LineBreakMode="WordWrap"
+                        IsVisible="False" />
 
-            <Label
-                x:Name="SavedLabel"
-                TextColor="Green"
-                LineBreakMode="WordWrap"
-                IsVisible="False" />
+                    <Label
+                        x:Name="SavedLabel"
+                        TextColor="{StaticResource SuccessGreen}"
+                        LineBreakMode="WordWrap"
+                        IsVisible="False" />
 
-            <Button x:Name="SaveButton" Text="Save" Clicked="OnSaveClicked" HorizontalOptions="Fill" />
+                    <Button x:Name="SaveButton" Text="Save" Clicked="OnSaveClicked" HorizontalOptions="Fill" Margin="0,4,0,0" />
+                </VerticalStackLayout>
+            </Border>
 
         </VerticalStackLayout>
     </ScrollView>
+    </Grid>
 
 </ContentPage>

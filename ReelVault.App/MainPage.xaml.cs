@@ -21,6 +21,19 @@ public partial class MainPage : ContentPage
 
         CategoryPicker.ItemsSource = new List<string> { FoodCategory, TravelCategory };
         CategoryPicker.SelectedIndex = 0;
+
+        // B2: shared tactile press feedback on every button on this page.
+        PressFeedback.AttachTo(SaveAndEnrichButton);
+        PressFeedback.AttachTo(CaptionSectionToggleButton);
+        PressFeedback.AttachTo(ExtractButton);
+        PressFeedback.AttachTo(SaveButton);
+    }
+
+    // B1: page content settles in (fade + slight slide-up) on every appearance.
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        _ = PageTransition.AnimateInAsync(ContentRoot);
     }
 
     private string SelectedCategory => CategoryPicker.SelectedItem as string ?? FoodCategory;
@@ -155,8 +168,21 @@ public partial class MainPage : ContentPage
 
     // Auto-triggers enrichment right after a minimal save so the flow completes in one tap:
     // share -> name+location -> rich card. A failed auto-enrich must never block getting to the
-    // saved item - the detail page's own "Enrich with Google" button lets the user retry.
+    // saved item - Detail's "Match this place" affordance lets the user retry later.
     private async Task FinishSaveAndEnrichAsync(Guid savedId)
+    {
+        await AutoEnrichSilentlyAsync(savedId);
+
+        var detailPage = _services.GetRequiredService<DetailPage>();
+        await detailPage.InitializeAsync(savedId);
+        await Navigation.PushAsync(detailPage);
+    }
+
+    // Part C: every save auto-enriches, silently - never a manual tap. High confidence stores the
+    // match; ambiguous/low-confidence/failure all leave the item un-enriched (Detail's "Match this
+    // place" affordance is the fallback) - this call never surfaces anything to the user either
+    // way, so a failure here must never block or interrupt the save it followed.
+    private async Task AutoEnrichSilentlyAsync(Guid savedId)
     {
         try
         {
@@ -166,10 +192,6 @@ public partial class MainPage : ContentPage
         {
             // Ignored - see comment above.
         }
-
-        var detailPage = _services.GetRequiredService<DetailPage>();
-        await detailPage.InitializeAsync(savedId);
-        await Navigation.PushAsync(detailPage);
     }
 
     private void SetNameLocationLoading(bool isLoading)
@@ -330,6 +352,14 @@ public partial class MainPage : ContentPage
                 return;
             }
 
+            // Part C: auto-enrich on save, silently - same as the name+location flow. This path
+            // stays on the Extract screen (no auto-navigation to Detail), so there's no rich card to
+            // show the result on immediately; it's there next time the item is opened.
+            if (result.Item is not null)
+            {
+                await AutoEnrichSilentlyAsync(result.Item.Id);
+            }
+
             ShowSaveStatus($"Saved as \"{result.Item?.Title}\".", isError: false);
         }
         catch (Exception ex)
@@ -452,7 +482,7 @@ public partial class MainPage : ContentPage
     private void ShowSaveStatus(string message, bool isError)
     {
         SaveStatusLabel.Text = message;
-        SaveStatusLabel.TextColor = isError ? Colors.Red : Colors.Green;
+        SaveStatusLabel.TextColor = isError ? ThemeColor("ClosedRed") : ThemeColor("SuccessGreen");
         SaveStatusLabel.IsVisible = true;
     }
 
@@ -461,4 +491,9 @@ public partial class MainPage : ContentPage
         SaveStatusLabel.Text = string.Empty;
         SaveStatusLabel.IsVisible = false;
     }
+
+    private static Color ThemeColor(string key) =>
+        Application.Current?.Resources.TryGetValue(key, out var value) == true && value is Color color
+            ? color
+            : Colors.Gray;
 }

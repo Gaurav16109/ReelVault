@@ -19,4 +19,12 @@ public class EnrichmentData
     public string? GoogleMapsUri { get; set; }
     public EnrichmentConfidence Confidence { get; set; }
     public DateTime EnrichedAt { get; set; }
+
+    // Places' own photo resource name (e.g. "places/ABC123/photos/XYZ789") - resolve via our own
+    // /api/places/photo proxy (see PlacePhotoUrlBuilder), never call Google directly from the client.
+    public string? PhotoReference { get; set; }
+
+    // Structured open/close spans for computing "Open now"/"Closed" live at render time - see
+    // OpeningHoursCalculator. Separate from OpeningHours (the human-readable weekday text) above.
+    public List<OpeningPeriod>? OpeningPeriods { get; set; }
 }

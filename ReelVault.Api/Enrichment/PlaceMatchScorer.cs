@@ -2,7 +2,7 @@ using ReelVault.Shared;
 
 namespace ReelVault.Api.Enrichment;
 
-public record ScoredMatch(EnrichmentConfidence Confidence, PlaceCandidate? TopCandidate);
+public record ScoredMatch(EnrichmentConfidence Confidence, PlaceCandidate? TopCandidate, IReadOnlyList<PlaceCandidate> ViableCandidates);
 
 // Pure, network-free confidence scoring over Text Search candidates. No signal here ever looks at
 // anything beyond what's already in PlaceCandidate - this only decides how much to trust a match,
@@ -22,31 +22,39 @@ public static class PlaceMatchScorer
     {
         if (candidates.Count == 0)
         {
-            return new ScoredMatch(EnrichmentConfidence.None, null);
+            return new ScoredMatch(EnrichmentConfidence.None, null, []);
         }
 
         var ranked = candidates
-            .Select(c => (Candidate: c, Score: CompositeScore(placeName, area, city, c)))
+            .Select(c => (Candidate: c, Score: CompositeScore(placeName, area, city, c), NameSim: NameSimilarity(placeName, c.Name)))
             .OrderByDescending(x => x.Score)
             .ToList();
 
         var top = ranked[0];
-        var nameSim = NameSimilarity(placeName, top.Candidate.Name);
         var locationMatch = LocationMatches(area, city, top.Candidate.Address);
         // With only one candidate there's no runner-up to be ambiguous against - treat as a clear gap.
         var gap = ranked.Count > 1 ? top.Score - ranked[1].Score : 1.0;
 
-        if (nameSim >= HighNameThreshold && locationMatch && gap >= HighGapThreshold)
+        // "Viable" = plausible enough that a human could reasonably be asked to pick it (same name-
+        // match bar Medium itself requires). Phase 5b uses this to tell genuine ambiguity (2+ viable,
+        // show a picker) from one so-so match buried among irrelevant Places results (not ambiguous,
+        // just "couldn't confidently match").
+        var viableCandidates = ranked
+            .Where(x => x.NameSim >= MediumNameThreshold)
+            .Select(x => x.Candidate)
+            .ToList();
+
+        if (top.NameSim >= HighNameThreshold && locationMatch && gap >= HighGapThreshold)
         {
-            return new ScoredMatch(EnrichmentConfidence.High, top.Candidate);
+            return new ScoredMatch(EnrichmentConfidence.High, top.Candidate, viableCandidates);
         }
 
-        if (nameSim >= MediumNameThreshold && (locationMatch || gap >= MediumGapThreshold))
+        if (top.NameSim >= MediumNameThreshold && (locationMatch || gap >= MediumGapThreshold))
         {
-            return new ScoredMatch(EnrichmentConfidence.Medium, top.Candidate);
+            return new ScoredMatch(EnrichmentConfidence.Medium, top.Candidate, viableCandidates);
         }
 
-        return new ScoredMatch(EnrichmentConfidence.Low, top.Candidate);
+        return new ScoredMatch(EnrichmentConfidence.Low, top.Candidate, viableCandidates);
     }
 
     private static double CompositeScore(string placeName, string? area, string? city, PlaceCandidate candidate)

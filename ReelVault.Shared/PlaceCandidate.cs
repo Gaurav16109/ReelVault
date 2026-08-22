@@ -8,6 +8,7 @@ public class PlaceCandidate
     public string? Name { get; set; }
     public string? Address { get; set; }
     public double? Rating { get; set; }
+    public int? UserRatingCount { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
 }

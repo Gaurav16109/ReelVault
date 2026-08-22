@@ -11,47 +11,96 @@
         <ToolbarItem Text="Settings" Clicked="OnSettingsClicked" />
     </ContentPage.ToolbarItems>
 
-    <Grid RowDefinitions="Auto,Auto,*" Padding="20">
+    <Grid>
+        <ScrollView x:Name="ContentRoot">
+            <VerticalStackLayout Padding="24,24,24,32" Spacing="6">
 
-        <Label
-            Grid.Row="0"
-            Text="What are you looking for?"
-            Style="{StaticResource Headline}" />
+                <Label Text="Good to see you" Style="{StaticResource SubHeadline}" HorizontalOptions="Start" HorizontalTextAlignment="Start" />
+                <Label Text="What are you craving today?" Style="{StaticResource Headline}" HorizontalOptions="Start" HorizontalTextAlignment="Start" FontSize="26" Margin="0,0,0,8" />
 
-        <ActivityIndicator
-            Grid.Row="1"
-            x:Name="LoadingIndicator"
-            IsRunning="False"
-            IsVisible="False" />
+                <ActivityIndicator x:Name="LoadingIndicator" IsRunning="False" IsVisible="False" Margin="0,24" />
 
-        <Label
-            Grid.Row="1"
-            x:Name="ErrorLabel"
-            TextColor="Red"
-            LineBreakMode="WordWrap"
-            IsVisible="False" />
+                <Label
+                    x:Name="ErrorLabel"
+                    TextColor="{StaticResource ClosedRed}"
+                    LineBreakMode="WordWrap"
+                    IsVisible="False" />
 
-        <CollectionView
-            Grid.Row="2"
-            x:Name="TilesCollectionView"
-            SelectionMode="Single"
-            SelectionChanged="OnTileSelected"
-            Margin="0,16,0,0">
-            <CollectionView.ItemsLayout>
-                <GridItemsLayout Orientation="Vertical" Span="2" HorizontalItemSpacing="12" VerticalItemSpacing="12" />
-            </CollectionView.ItemsLayout>
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="local:CategoryTile">
-                    <Border StrokeShape="RoundRectangle 12" BackgroundColor="{StaticResource Primary}" HeightRequest="100">
-                        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="4">
-                            <Label Text="{Binding DisplayName}" TextColor="White" FontAttributes="Bold" FontSize="18" HorizontalOptions="Center" />
-                            <Label Text="{Binding Count}" TextColor="White" FontSize="14" HorizontalOptions="Center" />
-                        </VerticalStackLayout>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                <CollectionView
+                    x:Name="TilesCollectionView"
+                    SelectionMode="None"
+                    Margin="0,12,0,0">
+                    <CollectionView.ItemsLayout>
+                        <GridItemsLayout Orientation="Vertical" Span="2" HorizontalItemSpacing="14" VerticalItemSpacing="14" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="local:CategoryTile">
+                            <Border
+                                StrokeShape="RoundRectangle 14"
+                                Stroke="{Binding TileBorderStroke}"
+                                StrokeThickness="1"
+                                Background="{Binding TileGradient}"
+                                HeightRequest="140">
+                                <Border.Shadow>
+                                    <Shadow Brush="{StaticResource ShadowColor}" Opacity="0.14" Radius="8" Offset="0,3" />
+                                </Border.Shadow>
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Tapped="OnTileTapped" />
+                                </Border.GestureRecognizers>
+                                <Grid>
+                                    <!-- Food tile only: tile_food.jpg fills the tile, clipped to the rounded
+                                         corners by the Border above. If the file is ever missing, the Image
+                                         simply renders nothing and the gold TileGradient behind it (still set
+                                         on the Border) shows through as a graceful, still-intentional fallback.
 
+                                         Vertical framing: the Image is deliberately taller (190) than the
+                                         140-tall tile and centered, so it overflows top/bottom equally and
+                                         gets clipped by the Border - this gives 25pt of "slack" on each edge.
+                                         TranslationY then nudges the whole (still AspectFill, undistorted)
+                                         image up within that slack, with no gaps, to move the neon "ENTER"
+                                         sign higher in the frame.
+
+                                         TO NUDGE: change ONLY the TranslationY value below.
+                                         Negative = up, positive = down. Safe range given HeightRequest=190
+                                         vs. the 140 tile: roughly -25 to +25 before an edge gap could appear
+                                         (push HeightRequest up too if you need more room than that). -->
+                                    <Image
+                                        Source="tile_food.jpg"
+                                        Aspect="AspectFill"
+                                        IsVisible="{Binding IsFoodTile}"
+                                        HeightRequest="190"
+                                        VerticalOptions="Center"
+                                        TranslationY="-25" />
+                                    <Grid Background="{StaticResource FoodTileScrimGradient}" IsVisible="{Binding IsFoodTile}" InputTransparent="True" />
+
+                                    <Grid RowDefinitions="Auto,*,Auto" Padding="16,14">
+                                        <Border
+                                            Grid.Row="0"
+                                            HorizontalOptions="Start"
+                                            BackgroundColor="#1AFFFFFF"
+                                            Stroke="{Binding IconTint}"
+                                            StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 9"
+                                            HeightRequest="32"
+                                            WidthRequest="32"
+                                            Padding="0">
+                                            <Label Text="{Binding Icon}" FontSize="15" HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Border>
+                                        <Label Grid.Row="1" Text="{Binding DisplayName}" FontFamily="OpenSansSemibold" FontSize="18" TextColor="White" VerticalOptions="End" />
+                                        <Label Grid.Row="2" Text="{Binding CountText}" Style="{StaticResource MutedLabel}" Margin="0,3,0,0" />
+                                    </Grid>
+
+                                    <!-- Tactile press feedback (Phase 6.2): a brief white glow flash driven
+                                         from code-behind alongside a scale bounce - see OnTileTapped. -->
+                                    <BoxView x:Name="PressGlow" Color="White" Opacity="0" InputTransparent="True" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+            </VerticalStackLayout>
+        </ScrollView>
     </Grid>
 
 </ContentPage>

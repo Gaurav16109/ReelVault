@@ -6,15 +6,32 @@ namespace ReelVault.App;
 public partial class DetailPage : ContentPage
 {
     private readonly IReelVaultApiClient _apiClient;
+    private readonly IApiSettingsService _apiSettings;
     private Guid _itemId;
     private string _category = "Food";
     private string? _enrichedMapsUri;
+    private bool _isEditMode;
 
-    public DetailPage(IReelVaultApiClient apiClient)
+    public DetailPage(IReelVaultApiClient apiClient, IApiSettingsService apiSettings)
     {
         InitializeComponent();
         _apiClient = apiClient;
+        _apiSettings = apiSettings;
         StatusPicker.ItemsSource = Enum.GetNames<ItemStatus>();
+
+        // B2: shared tactile press feedback on every button on this page.
+        PressFeedback.AttachTo(MatchPlaceButton);
+        PressFeedback.AttachTo(NoneOfTheseButton);
+        PressFeedback.AttachTo(SaveButton);
+        PressFeedback.AttachTo(ArchiveButton);
+    }
+
+    // B1: page content settles in (fade + slight slide-up) independently of InitializeAsync's own
+    // data load, which the caller drives explicitly right after resolving this page.
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        _ = PageTransition.AnimateInAsync(ContentRoot);
     }
 
     // Called by the caller right after resolving this page from DI, before pushing it.
@@ -30,6 +47,7 @@ public partial class DetailPage : ContentPage
         try
         {
             var item = await _apiClient.GetItemAsync(itemId);
+            SetEditMode(false);
             Populate(item);
             FormPanel.IsVisible = true;
         }
@@ -45,15 +63,36 @@ public partial class DetailPage : ContentPage
         }
     }
 
+    // Part B: default read-only VIEW mode with an Edit toggle that reveals the full form. Toggling
+    // never re-fetches - Populate() already filled both panels' controls from the same data, so
+    // flipping modes is just a visibility swap (and, for edit->view without saving, a clean
+    // "discard unsaved changes" for free).
+    private void OnEditToggleClicked(object sender, EventArgs e) => SetEditMode(!_isEditMode);
+
+    private void SetEditMode(bool editing)
+    {
+        _isEditMode = editing;
+        ViewModePanel.IsVisible = !editing;
+        EditModePanel.IsVisible = editing;
+        EditToolbarItem.Text = editing ? "Cancel" : "Edit";
+    }
+
     private void Populate(SavedItemDetailDto item)
     {
         _category = item.Category;
         Title = item.Title ?? "Item Detail";
-        CategoryLabel.Text = item.Category;
+
+        var displayTitle = string.IsNullOrWhiteSpace(item.Title) ? "(untitled)" : item.Title;
+        TitleViewLabel.Text = displayTitle;
         TitleEntry.Text = item.Title;
+
         StatusPicker.SelectedItem = item.Status.ToString();
+        StatusBadgeLabel.Text = item.Status.ToString();
+        StatusBadgeBorder.Stroke = ThemeColor(item.Status == ItemStatus.Visited ? "SuccessGreen" : "CardBorder");
+
         SummaryEditor.Text = item.Summary;
         UserNotesEditor.Text = item.UserNotes;
+        UserNotesViewLabel.Text = string.IsNullOrWhiteSpace(item.UserNotes) ? "No notes yet." : item.UserNotes;
 
         FoodPanel.IsVisible = _category != "Travel";
         TravelPanel.IsVisible = _category == "Travel";
@@ -81,15 +120,51 @@ public partial class DetailPage : ContentPage
         TravelMapQueryEntry.Text = travel?.MapQuery;
         NearbyPlacesEntry.Text = travel?.NearbyPlaces is { Count: > 0 } ? string.Join(", ", travel.NearbyPlaces) : null;
 
+        var areaCity = string.Join(", ", new[] { food?.Area ?? travel?.Area, food?.City ?? travel?.City }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        AreaCityLabel.Text = areaCity;
+        AreaCityLabel.IsVisible = !string.IsNullOrWhiteSpace(areaCity);
+
+        PopulateHero(item);
         PopulateEnrichment(item);
+        BuildExtractedFieldsView(item);
     }
 
-    // Reel-extracted data above is never touched by this - enrichment is a strictly separate,
-    // clearly-labeled section, populated only from item.Enrichment (Google), never merged in.
+    // Hero photo priority matches the browse card grid: Google Places photo (if enriched) > the
+    // Instagram thumbnail fallback > a flat category-tinted placeholder that always looks good.
+    private void PopulateHero(SavedItemDetailDto item)
+    {
+        var photoUrl = PlacePhotoUrlBuilder.BuildUrl(_apiSettings.BaseUrl, item.Enrichment?.PhotoReference, PlacePhotoUrlBuilder.HeroMaxWidthPx)
+            ?? NullIfEmpty(item.ThumbnailUrl);
+
+        if (photoUrl is not null)
+        {
+            HeroImage.Source = photoUrl;
+            HeroImage.IsVisible = true;
+            HeroPlaceholder.IsVisible = false;
+        }
+        else
+        {
+            HeroImage.IsVisible = false;
+            HeroPlaceholder.IsVisible = true;
+            HeroPlaceholder.BackgroundColor = CategoryTheme.ColorFor(item.Category);
+            HeroPlaceholderLabel.Text = !string.IsNullOrWhiteSpace(item.Title) ? item.Title[..1].ToUpperInvariant() : "?";
+        }
+
+        CategoryBadgeLabel.Text = item.Category.ToUpperInvariant();
+    }
+
+    // Reel-extracted data is never touched by this - enrichment is a strictly separate, clearly
+    // labeled section, populated only from item.Enrichment (Google), never merged in. Part C: the
+    // manual "Match this place" affordance only appears when NOT already enriched (auto-enrich on
+    // save already tried silently) - there's no always-present Enrich button anymore.
     private void PopulateEnrichment(SavedItemDetailDto item)
     {
         EnrichmentPanel.IsVisible = false;
+        EnrichmentNoteLabel.IsVisible = false;
         EnrichMessageLabel.IsVisible = false;
+        CandidatePickerPanel.IsVisible = false;
+        OpenNowBadge.IsVisible = false;
+        MatchPlaceButton.IsVisible = item.EnrichmentStatus != EnrichmentStatus.Enriched;
         _enrichedMapsUri = null;
 
         if (item.EnrichmentStatus == EnrichmentStatus.Enriched && item.Enrichment is { } enrichment)
@@ -97,27 +172,114 @@ public partial class DetailPage : ContentPage
             EnrichedNameLabel.Text = enrichment.MatchedPlaceName;
             EnrichedAddressLabel.Text = enrichment.Address;
             EnrichedRatingLabel.Text = enrichment.Rating is double rating
-                ? $"Rating: {rating:0.0} ({enrichment.UserRatingCount ?? 0} reviews)"
+                ? $"★ {rating:0.0} ({enrichment.UserRatingCount ?? 0} reviews)"
                 : null;
             EnrichedPriceLabel.Text = enrichment.PriceLevel is not null ? $"Price: {enrichment.PriceLevel}" : null;
             EnrichedTypesLabel.Text = enrichment.Types is { Count: > 0 } ? $"Type: {string.Join(", ", enrichment.Types)}" : null;
             EnrichedHoursLabel.Text = enrichment.OpeningHours is { Count: > 0 } ? string.Join("\n", enrichment.OpeningHours) : null;
 
+            // Computed live from structured periods, not a stale snapshot from enrichment time -
+            // hidden entirely when hours aren't available (never a guess).
+            var isOpenNow = OpeningHoursCalculator.IsOpenNow(enrichment.OpeningPeriods, DateTime.Now);
+            if (isOpenNow is true)
+            {
+                var color = ThemeColor("SuccessGreen");
+                OpenNowLabel.Text = "● Open now";
+                OpenNowLabel.TextColor = color;
+                OpenNowBadge.BackgroundColor = color.WithAlpha(0.15f);
+                OpenNowBadge.IsVisible = true;
+            }
+            else if (isOpenNow is false)
+            {
+                var color = ThemeColor("ClosedRed");
+                OpenNowLabel.Text = "● Closed";
+                OpenNowLabel.TextColor = color;
+                OpenNowBadge.BackgroundColor = color.WithAlpha(0.15f);
+                OpenNowBadge.IsVisible = true;
+            }
+
             _enrichedMapsUri = enrichment.GoogleMapsUri;
-            EnrichedMapsLinkLabel.IsVisible = !string.IsNullOrWhiteSpace(enrichment.GoogleMapsUri);
+            MapsLinkBorder.IsVisible = !string.IsNullOrWhiteSpace(enrichment.GoogleMapsUri);
 
             EnrichmentPanel.IsVisible = true;
+
+            EnrichmentNoteLabel.Text = $"Enriched from Google Places{(item.EnrichedAt is DateTime enrichedAt ? $" on {enrichedAt:MMM d, yyyy}" : string.Empty)}.";
+            EnrichmentNoteLabel.IsVisible = true;
         }
         else if (item.EnrichmentStatus == EnrichmentStatus.NoConfidentMatch)
         {
-            EnrichMessageLabel.Text = "Couldn't confidently match this place — you can add details manually.";
+            EnrichMessageLabel.Text = "Couldn't confidently match this place on Google — you can try again or add details manually.";
             EnrichMessageLabel.IsVisible = true;
         }
     }
 
-    private async void OnEnrichClicked(object sender, EventArgs e)
+    // Part B: "from the reel" fields, but ONLY the ones that actually have a value - built here
+    // (not as static XAML with per-field IsVisible bindings) so a mostly-empty extraction never
+    // shows as a wall of empty boxes; the whole card hides itself if nothing qualifies.
+    private void BuildExtractedFieldsView(SavedItemDetailDto item)
     {
-        EnrichButton.IsEnabled = false;
+        ExtractedFieldsContainer.Children.Clear();
+
+        if (_category == "Travel")
+        {
+            var travel = item.TravelData;
+            AddReadOnlyField("Area", travel?.Area);
+            AddReadOnlyField("City", travel?.City);
+            AddReadOnlyField("Place type", travel?.PlaceType);
+            AddReadOnlyField("Best time to visit", travel?.BestTimeToVisit);
+            AddReadOnlyField("Estimated cost", travel?.EstimatedCost);
+            AddReadOnlyField("Highlights", travel?.Highlights is { Count: > 0 } ? string.Join(", ", travel.Highlights) : null);
+            AddReadOnlyField("Activities", travel?.Activities is { Count: > 0 } ? string.Join(", ", travel.Activities) : null);
+            AddReadOnlyField("Map query", travel?.MapQuery);
+            AddReadOnlyField("Nearby places", travel?.NearbyPlaces is { Count: > 0 } ? string.Join(", ", travel.NearbyPlaces) : null);
+        }
+        else
+        {
+            var food = item.FoodData;
+            AddReadOnlyField("Area", food?.Area);
+            AddReadOnlyField("City", food?.City);
+            AddReadOnlyField("Cuisine", food?.Cuisine);
+            AddReadOnlyField("Price range", food?.PriceRange);
+            AddReadOnlyField("Must try", food?.MustTry is { Count: > 0 } ? string.Join(", ", food.MustTry) : null);
+            AddReadOnlyField("Rating", food?.Rating);
+            AddReadOnlyField("Opening hours", food?.OpeningHours);
+            AddReadOnlyField("Map query", food?.MapQuery);
+            AddReadOnlyField("Veg options", food?.VegOptions);
+            AddReadOnlyField("Parking", food?.Parking);
+        }
+
+        ExtractedFieldsPanel.IsVisible = ExtractedFieldsContainer.Children.Count > 0;
+    }
+
+    private void AddReadOnlyField(string label, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        ExtractedFieldsContainer.Children.Add(new VerticalStackLayout
+        {
+            Spacing = DesignTuning.DetailFieldRowSpacing,
+            Children =
+            {
+                new Label { Text = label, Style = (Style)Application.Current!.Resources["MutedLabel"] },
+                new Label { Text = value, LineBreakMode = LineBreakMode.WordWrap }
+            }
+        });
+    }
+
+    private static Color ThemeColor(string key) =>
+        Application.Current?.Resources.TryGetValue(key, out var value) == true && value is Color color
+            ? color
+            : Colors.Gray;
+
+    // Part C: the manual fallback for a place that auto-enrich (on save) couldn't confidently
+    // match, or left genuinely ambiguous - reuses the exact same enrichment/scoring/disambiguation
+    // logic as the old always-present "Enrich with Google" button, just surfaced conditionally.
+    private async void OnMatchPlaceClicked(object sender, EventArgs e)
+    {
+        MatchPlaceButton.IsEnabled = false;
         EnrichLoadingIndicator.IsRunning = true;
         EnrichLoadingIndicator.IsVisible = true;
         EnrichMessageLabel.IsVisible = false;
@@ -127,8 +289,15 @@ public partial class DetailPage : ContentPage
         {
             var response = await _apiClient.EnrichItemAsync(_itemId);
             Populate(response.Item);
+            // A1 fix: let any ListPage still on the nav stack know this item changed, so its browse
+            // card picks up the new photo without needing to be the one currently on screen.
+            ItemChangeNotifier.NotifyChanged();
 
-            if (!response.Enriched)
+            if (response.Status == EnrichmentStatus.AmbiguousMatch && response.Candidates.Count >= 2)
+            {
+                ShowCandidatePicker(response.Candidates);
+            }
+            else if (!response.Enriched)
             {
                 EnrichMessageLabel.Text = response.Message;
                 EnrichMessageLabel.IsVisible = true;
@@ -141,14 +310,66 @@ public partial class DetailPage : ContentPage
         }
         finally
         {
-            EnrichButton.IsEnabled = true;
+            MatchPlaceButton.IsEnabled = true;
             EnrichLoadingIndicator.IsRunning = false;
             EnrichLoadingIndicator.IsVisible = false;
         }
     }
 
+    // Phase 5b: only reached when the match response is genuinely ambiguous (2+ viable
+    // candidates) - the user picks by location (name/address/rating), nothing is stored yet.
+    private void ShowCandidatePicker(List<PlaceCandidate> candidates)
+    {
+        CandidatesCollectionView.ItemsSource = candidates.Select(PlaceCandidateDisplay.From).ToList();
+        CandidatePickerPanel.IsVisible = true;
+    }
+
+    private async void OnCandidateSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is not PlaceCandidateDisplay candidate)
+        {
+            return;
+        }
+
+        CandidatesCollectionView.SelectedItem = null;
+        CandidateSelectLoadingIndicator.IsRunning = true;
+        CandidateSelectLoadingIndicator.IsVisible = true;
+        ErrorLabel.IsVisible = false;
+
+        try
+        {
+            var response = await _apiClient.SelectEnrichmentCandidateAsync(_itemId, candidate.PlaceId);
+            Populate(response.Item);
+            ItemChangeNotifier.NotifyChanged();
+        }
+        catch (Exception ex)
+        {
+            ErrorLabel.Text = ex.Message;
+            ErrorLabel.IsVisible = true;
+        }
+        finally
+        {
+            CandidateSelectLoadingIndicator.IsRunning = false;
+            CandidateSelectLoadingIndicator.IsVisible = false;
+        }
+    }
+
+    // Explicitly declines every candidate - nothing is stored (no endpoint is even called), so the
+    // item stays exactly as it was before Match this place was tapped.
+    private void OnNoneOfTheseClicked(object sender, EventArgs e)
+    {
+        CandidatePickerPanel.IsVisible = false;
+        EnrichMessageLabel.Text = "Okay — you can try again later, or add details manually.";
+        EnrichMessageLabel.IsVisible = true;
+    }
+
     private async void OnMapsLinkTapped(object sender, TappedEventArgs e)
     {
+        if (sender is VisualElement element)
+        {
+            await PressFeedback.PunchAsync(element);
+        }
+
         if (!string.IsNullOrWhiteSpace(_enrichedMapsUri))
         {
             await Launcher.Default.OpenAsync(new Uri(_enrichedMapsUri));
@@ -177,6 +398,8 @@ public partial class DetailPage : ContentPage
 
             var updated = await _apiClient.UpdateItemAsync(_itemId, request);
             Populate(updated);
+            ItemChangeNotifier.NotifyChanged();
+            SetEditMode(false);
             await DisplayAlertAsync("Saved", "Changes saved.", "OK");
         }
         catch (Exception ex)
@@ -235,6 +458,7 @@ public partial class DetailPage : ContentPage
         try
         {
             await _apiClient.DeleteItemAsync(_itemId);
+            ItemChangeNotifier.NotifyChanged();
             await Navigation.PopAsync();
         }
         catch (Exception ex)

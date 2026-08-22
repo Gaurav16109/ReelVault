@@ -21,7 +21,11 @@ public interface IReelVaultApiClient
     Task<LocationsResult> GetLocationsAsync(string? category = null);
 
     // On-demand only - never called automatically. Throws on a genuine failure (network, or the
-    // API's 502 when Places itself failed); a "no confident match" result is NOT an exception, it's
-    // a normal EnrichItemResponse with Enriched = false.
+    // API's 502 when Places itself failed); a "no confident match" or "ambiguous match" result is
+    // NOT an exception - check response.Status (NoConfidentMatch / AmbiguousMatch / Enriched).
     Task<EnrichItemResponse> EnrichItemAsync(Guid id);
+
+    // Finalizes a user's pick from an AmbiguousMatch response's candidate list. Throws on a genuine
+    // failure (invalid placeId, network, Places error) - same error contract as EnrichItemAsync.
+    Task<EnrichItemResponse> SelectEnrichmentCandidateAsync(Guid id, string placeId);
 }

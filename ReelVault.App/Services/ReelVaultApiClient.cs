@@ -22,7 +22,17 @@ public class ReelVaultApiClient(HttpClient httpClient, IApiSettingsService apiSe
     // Re-reads the persisted setting before every call so editing it on the Settings screen takes
     // effect immediately - even for a client instance that was injected once and held long-term
     // (e.g. HomePage, resolved once at app start and never re-created), not just freshly-resolved ones.
-    private void SyncBaseAddress() => httpClient.BaseAddress = new Uri(apiSettings.BaseUrl);
+    // Only assigns when it actually changed: HttpClient forbids touching BaseAddress at all once a
+    // request has been sent on that instance (even to the same value it already holds), which every
+    // page that makes 2+ calls per visit (e.g. ListPage: locations then items) would otherwise hit.
+    private void SyncBaseAddress()
+    {
+        var desired = new Uri(apiSettings.BaseUrl);
+        if (httpClient.BaseAddress != desired)
+        {
+            httpClient.BaseAddress = desired;
+        }
+    }
 
     public async Task<HealthResponse> GetHealthAsync()
     {
@@ -126,6 +136,21 @@ public class ReelVaultApiClient(HttpClient httpClient, IApiSettingsService apiSe
     {
         SyncBaseAddress();
         var response = await httpClient.PostAsync($"api/items/{id}/enrich", content: null);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(await ReadErrorMessageAsync(response));
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<EnrichItemResponse>(JsonOptions);
+        return result ?? throw new InvalidOperationException("API returned an empty response.");
+    }
+
+    public async Task<EnrichItemResponse> SelectEnrichmentCandidateAsync(Guid id, string placeId)
+    {
+        SyncBaseAddress();
+        var response = await httpClient.PostAsJsonAsync(
+            $"api/items/{id}/enrich/select", new SelectEnrichmentCandidateRequest { PlaceId = placeId }, JsonOptions);
 
         if (!response.IsSuccessStatusCode)
         {

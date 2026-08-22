@@ -17,6 +17,7 @@ public partial class HomePage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        _ = PageTransition.AnimateInAsync(ContentRoot);
         await LoadTilesAsync();
     }
 
@@ -43,14 +44,14 @@ public partial class HomePage : ContentPage
         }
     }
 
-    private async void OnTileSelected(object sender, SelectionChangedEventArgs e)
+    private async void OnTileTapped(object sender, TappedEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not CategoryTile tile)
+        if (sender is not VisualElement { BindingContext: CategoryTile tile } tileElement)
         {
             return;
         }
 
-        TilesCollectionView.SelectedItem = null;
+        await PressFeedback.PunchAsync(tileElement, tileElement.FindByName("PressGlow") as BoxView);
 
         var listPage = _services.GetRequiredService<ListPage>();
         listPage.InitializeCategory(tile.Category);

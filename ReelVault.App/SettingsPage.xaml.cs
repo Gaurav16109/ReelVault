@@ -11,11 +11,15 @@ public partial class SettingsPage : ContentPage
     {
         InitializeComponent();
         _apiSettings = apiSettings;
+
+        // B2: shared tactile press feedback.
+        PressFeedback.AttachTo(SaveButton);
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        _ = PageTransition.AnimateInAsync(ContentRoot);
         Refresh();
     }
 

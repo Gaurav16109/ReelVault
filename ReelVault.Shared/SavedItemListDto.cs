@@ -12,4 +12,10 @@ public class SavedItemListDto
     public string? Area { get; set; }
     public string? City { get; set; }
     public DateTime SavedAt { get; set; }
+
+    // Enrichment summary for the browse card grid (Phase 6) - the full EnrichmentData only travels
+    // on the detail DTO; the card grid just needs enough to show a rating badge and a photo.
+    public EnrichmentStatus EnrichmentStatus { get; set; }
+    public double? Rating { get; set; }
+    public string? PhotoReference { get; set; }
 }

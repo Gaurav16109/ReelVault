@@ -10,4 +10,8 @@ public class EnrichItemResponse
     public EnrichmentConfidence Confidence { get; set; }
     public string Message { get; set; } = string.Empty;
     public List<PlaceCandidate> Candidates { get; set; } = [];
+
+    // The outcome of THIS call - distinct from Item.EnrichmentStatus (the item's persisted state),
+    // since AmbiguousMatch is never persisted. Enriched == (Status == EnrichmentStatus.Enriched).
+    public EnrichmentStatus Status { get; set; }
 }

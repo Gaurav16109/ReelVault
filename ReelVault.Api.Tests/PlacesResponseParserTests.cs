@@ -125,6 +125,52 @@ public class PlacesResponseParserTests
         Assert.Null(data.GoogleMapsUri);
     }
 
+    [Fact]
+    public void ParseDetailsResponse_WithPhotosAndOpeningPeriods_MapsBoth()
+    {
+        // Arrange: a place with a photo and structured Friday-night-into-Saturday hours.
+        const string json = """
+            {
+              "id": "ChIJp_pool123",
+              "displayName": { "text": "Toit Brewpub" },
+              "photos": [
+                { "name": "places/ChIJp_pool123/photos/AWU5eF", "widthPx": 4000, "heightPx": 3000 },
+                { "name": "places/ChIJp_pool123/photos/second", "widthPx": 4000, "heightPx": 3000 }
+              ],
+              "regularOpeningHours": {
+                "weekdayDescriptions": ["Friday: 8:30 PM – 1:00 AM"],
+                "periods": [
+                  { "open": { "day": 5, "hour": 20, "minute": 30 }, "close": { "day": 6, "hour": 1, "minute": 0 } }
+                ]
+              }
+            }
+            """;
+
+        // Act
+        var data = PlacesResponseParser.ParseDetailsResponse(json, EnrichmentConfidence.High, DateTime.UtcNow);
+
+        // Assert: only the FIRST photo is kept.
+        Assert.Equal("places/ChIJp_pool123/photos/AWU5eF", data.PhotoReference);
+
+        Assert.NotNull(data.OpeningPeriods);
+        var period = Assert.Single(data.OpeningPeriods);
+        Assert.Equal(DayOfWeek.Friday, period.OpenDay);
+        Assert.Equal(new TimeOnly(20, 30), period.OpenTime);
+        Assert.Equal(DayOfWeek.Saturday, period.CloseDay);
+        Assert.Equal(new TimeOnly(1, 0), period.CloseTime);
+    }
+
+    [Fact]
+    public void ParseDetailsResponse_NoPhotosOrPeriods_LeavesThemNullNotFabricated()
+    {
+        // Act
+        var data = PlacesResponseParser.ParseDetailsResponse(DetailsResponseJson, EnrichmentConfidence.High, DateTime.UtcNow);
+
+        // Assert: DetailsResponseJson (above) has weekdayDescriptions but no photos/periods.
+        Assert.Null(data.PhotoReference);
+        Assert.Null(data.OpeningPeriods);
+    }
+
     [Theory]
     [InlineData("PRICE_LEVEL_FREE", "Free")]
     [InlineData("PRICE_LEVEL_INEXPENSIVE", "Inexpensive")]

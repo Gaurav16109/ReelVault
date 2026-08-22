@@ -37,8 +37,10 @@ public class PlaceMatchScorerTests
         // Act
         var result = PlaceMatchScorer.Score("Cafe Coffee Day", "MG Road", "Bangalore", candidates);
 
-        // Assert
+        // Assert: genuinely ambiguous - both are equally plausible, so Phase 5b should offer both
+        // as picker options.
         Assert.NotEqual(EnrichmentConfidence.High, result.Confidence);
+        Assert.Equal(2, result.ViableCandidates.Count);
     }
 
     [Fact]
@@ -99,5 +101,60 @@ public class PlaceMatchScorerTests
 
         // Assert
         Assert.Equal(EnrichmentConfidence.High, result.Confidence);
+    }
+
+    [Fact]
+    public void Score_HighConfidenceMatch_StillPopulatesViableCandidatesWithTheWinner()
+    {
+        // Arrange
+        var candidates = new List<PlaceCandidate>
+        {
+            new() { PlaceId = "1", Name = "Toit Brewpub", Address = "100 Feet Road, Indiranagar, Bangalore" }
+        };
+
+        // Act
+        var result = PlaceMatchScorer.Score("Toit Brewpub", "Indiranagar", "Bangalore", candidates);
+
+        // Assert
+        Assert.Equal(EnrichmentConfidence.High, result.Confidence);
+        Assert.Single(result.ViableCandidates);
+    }
+
+    [Fact]
+    public void Score_OnlyOneCandidateNameMatchesAmongUnrelatedResults_ViableCandidatesExcludesNoise()
+    {
+        // Arrange: a broad Places search can return plenty of irrelevant results alongside the real
+        // match - those shouldn't count toward "ambiguous", or every search would show a picker.
+        var candidates = new List<PlaceCandidate>
+        {
+            new() { PlaceId = "1", Name = "Coffee House Bandra", Address = "Bandra West, Mumbai" },
+            new() { PlaceId = "2", Name = "Zzyx Hardware Store", Address = "Bandra East, Mumbai" },
+            new() { PlaceId = "3", Name = "Quick Print Shop", Address = "Khar, Mumbai" }
+        };
+
+        // Act
+        var result = PlaceMatchScorer.Score("Coffee House Bandra", "Bandra", "Mumbai", candidates);
+
+        // Assert
+        var viable = Assert.Single(result.ViableCandidates);
+        Assert.Equal("1", viable.PlaceId);
+    }
+
+    [Fact]
+    public void Score_TwoGenuinelySimilarNamedCandidates_BothAreViableForThePicker()
+    {
+        // Arrange: two different branches of a generic-named place - genuinely ambiguous.
+        var candidates = new List<PlaceCandidate>
+        {
+            new() { PlaceId = "1", Name = "Coffee House", Address = "Bandra West, Mumbai" },
+            new() { PlaceId = "2", Name = "Coffee House", Address = "Khar, Mumbai" }
+        };
+
+        // Act
+        var result = PlaceMatchScorer.Score("Coffee House Bandra", "Bandra", "Mumbai", candidates);
+
+        // Assert
+        Assert.NotEqual(EnrichmentConfidence.High, result.Confidence);
+        Assert.Equal(2, result.ViableCandidates.Count);
     }
 }

@@ -14,6 +14,11 @@ public partial class App : Application
 		_services = services;
 		_sharedContentService = sharedContentService;
 		_sharedContentService.ContentReceived += OnSharedContentReceived;
+
+		// Phase 6.2: night theme only, no user-facing toggle - force dark before any page is built so
+		// native platform chrome (status bar, keyboard, system alerts), not just our own styles, is
+		// consistently dark too.
+		UserAppTheme = AppTheme.Dark;
 	}
 
 	protected override Window CreateWindow(IActivationState? activationState)
