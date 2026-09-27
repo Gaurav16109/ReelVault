@@ -26,14 +26,6 @@ public partial class DetailPage : ContentPage
         PressFeedback.AttachTo(ArchiveButton);
     }
 
-    // B1: page content settles in (fade + slight slide-up) independently of InitializeAsync's own
-    // data load, which the caller drives explicitly right after resolving this page.
-    protected override void OnAppearing()
-    {
-        base.OnAppearing();
-        _ = PageTransition.AnimateInAsync(ContentRoot);
-    }
-
     // Called by the caller right after resolving this page from DI, before pushing it.
     public async Task InitializeAsync(Guid itemId)
     {

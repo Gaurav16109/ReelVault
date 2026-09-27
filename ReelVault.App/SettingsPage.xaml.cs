@@ -19,7 +19,6 @@ public partial class SettingsPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        _ = PageTransition.AnimateInAsync(ContentRoot);
         Refresh();
     }
 

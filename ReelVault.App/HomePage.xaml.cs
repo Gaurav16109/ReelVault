@@ -17,7 +17,6 @@ public partial class HomePage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _ = PageTransition.AnimateInAsync(ContentRoot);
         await LoadTilesAsync();
     }
 
@@ -30,6 +29,16 @@ public partial class HomePage : ContentPage
         try
         {
             var categories = await _apiClient.GetCategoriesAsync();
+
+            // Bug fix: OnAppearing (and therefore this reload) fires on every appearance, including
+            // every back-navigation to Home. Reassigning ItemsSource straight to a new list
+            // reference left MAUI's CollectionView on Catalyst with stale cell layout/measurement
+            // from the previous bind, causing the tile grid to render overlapping the heading above
+            // it instead of properly below it. Clearing to null first forces a full cell
+            // teardown/rebuild on the following assignment, guaranteeing a fresh, correctly measured
+            // layout (and incidentally fresh cell instances, so no residual per-cell render
+            // transform can carry over either).
+            TilesCollectionView.ItemsSource = null;
             TilesCollectionView.ItemsSource = CategoryTile.BuildFrom(categories);
         }
         catch (Exception ex)

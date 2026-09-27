@@ -29,13 +29,6 @@ public partial class MainPage : ContentPage
         PressFeedback.AttachTo(SaveButton);
     }
 
-    // B1: page content settles in (fade + slight slide-up) on every appearance.
-    protected override void OnAppearing()
-    {
-        base.OnAppearing();
-        _ = PageTransition.AnimateInAsync(ContentRoot);
-    }
-
     private string SelectedCategory => CategoryPicker.SelectedItem as string ?? FoodCategory;
 
     // Called by App.xaml.cs right after this page is resolved from DI, before it's pushed onto the

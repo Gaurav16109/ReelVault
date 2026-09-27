@@ -17,6 +17,15 @@ public partial class ListPage : ContentPage
     private bool _suppressLocationFilterEvents;
     private int _cardEntranceCounter;
 
+    // Bug fix: OnAppearing (and therefore LoadItemsAsync) fires on EVERY appearance, including
+    // every back-navigation to an already-visited Browse page, not just the first. Animating each
+    // card in (fade from Opacity=0) on every one of those reloads caused a hide-then-refade flicker
+    // every time you returned to Browse. Now the entrance animation only ever plays once per
+    // ListPage instance - on its genuinely first load - and every later reload (back-nav, filter
+    // change, search, ItemChangeNotifier) shows cards immediately at full opacity, no animation.
+    private bool _hasLoadedItemsOnce;
+    private bool _animateCardEntranceThisLoad;
+
     // B4: the full (text-unfiltered) category+location-scoped set, used purely to answer live
     // suggestion queries client-side - populated from the exact same GetItemsAsync call the grid
     // itself already makes (only ever when q is empty), so suggestions never depend on anything
@@ -54,7 +63,6 @@ public partial class ListPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        _ = PageTransition.AnimateInAsync(ContentRoot);
         await LoadLocationsAsync();
         await LoadItemsAsync();
     }
@@ -86,6 +94,8 @@ public partial class ListPage : ContentPage
         ErrorLabel.IsVisible = false;
         EmptyStatePanel.IsVisible = false;
         _cardEntranceCounter = 0;
+        _animateCardEntranceThisLoad = !_hasLoadedItemsOnce;
+        _hasLoadedItemsOnce = true;
 
         try
         {
@@ -208,13 +218,25 @@ public partial class ListPage : ContentPage
         await LoadItemsAsync();
     }
 
-    // B3: gentle fade + slide-up as each card first becomes part of the visual tree (including
-    // cards that scroll into view later, as CollectionView virtualizes) - a light per-cell cascade.
+    // B3: gentle fade + slide-up as each card first becomes part of the visual tree - but only on
+    // this ListPage instance's genuinely first load. Every later reload (back-navigation, filter
+    // change, search, ItemChangeNotifier) shows cards immediately at full opacity instead of
+    // re-animating, since those cards may already be fully visible and re-fading them flickers.
     private void OnCardLoaded(object sender, EventArgs e)
     {
-        if (sender is VisualElement element)
+        if (sender is not VisualElement element)
+        {
+            return;
+        }
+
+        if (_animateCardEntranceThisLoad)
         {
             EntranceAnimation.PlayOnLoad(element, _cardEntranceCounter++);
+        }
+        else
+        {
+            element.Opacity = 1;
+            element.TranslationY = 0;
         }
     }
 
